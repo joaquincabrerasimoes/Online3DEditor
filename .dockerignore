@@ -1,0 +1,33 @@
+# Version control
+.git
+.gitignore
+
+# Editor / IDE
+.vscode
+.idea
+*.swp
+
+# Node
+node_modules
+npm-debug.log*
+
+# Build outputs (built fresh inside the image)
+build
+dist
+
+# Tests / docs / sandbox
+test
+docs
+sandbox
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Wikiteam working dir
+.wikiteam
+
+# Docker artifacts
+Dockerfile
+.dockerignore
+docker-compose.yml

@@ -1,0 +1,37 @@
+server {
+    listen       ${PORT};
+    server_name  _;
+
+    root   /usr/share/nginx/html;
+    index  website/index.html;
+
+    # Root URL → editor
+    location = / {
+        return 302 /website/index.html;
+    }
+
+    # Static asset cache headers
+    location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)$ {
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+        try_files $uri =404;
+    }
+
+    # 3D model and envmap assets — large but rarely change
+    location /website/assets/ {
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000";
+        try_files $uri =404;
+    }
+
+    # Default file serving
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # Gzip text-based assets
+    gzip            on;
+    gzip_vary       on;
+    gzip_min_length 1024;
+    gzip_types      text/plain text/css application/javascript application/json image/svg+xml;
+}

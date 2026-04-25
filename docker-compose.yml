@@ -1,0 +1,10 @@
+services:
+  editor:
+    build: .
+    image: online3deditor:latest
+    container_name: online3deditor
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-8085}:${PORT:-8085}"
+    environment:
+      PORT: ${PORT:-8085}
