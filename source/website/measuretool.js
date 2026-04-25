@@ -6,6 +6,7 @@ import { Loc } from '../engine/core/localization.js';
 import * as THREE from 'three';
 import { ColorComponentToFloat, RGBColor } from '../engine/model/color.js';
 import { IntersectionMode } from '../engine/viewer/viewermodel.js';
+import eventBus, { Events } from './eventbus.js';
 
 function GetFaceWorldNormal (intersection)
 {
@@ -106,6 +107,21 @@ export class MeasureTool
 
         this.panel = null;
         this.button = null;
+
+        // Subscribe to mode changes to exit measure when T/R/S pressed
+        eventBus.on (Events.ModeChanged, ({ mode }) => {
+            if (mode !== 'measure' && this.isActive) {
+                this.ExitActive ();
+            }
+        });
+
+        // Delete key clears markers when measure mode active
+        eventBus.on (Events.SelectionDeleteRequested, () => {
+            if (this.isActive) {
+                this.ClearMarkers ();
+                this.UpdatePanel ();
+            }
+        });
     }
 
     SetButton (button)
@@ -124,15 +140,37 @@ export class MeasureTool
             return;
         }
         this.isActive = isActive;
-        this.button.SetSelected (isActive);
+        if (this.button) {
+            this.button.SetSelected (isActive);
+        }
         if (this.isActive) {
             this.panel = AddDiv (document.body, 'ov_measure_panel');
             this.UpdatePanel ();
             this.Resize ();
         } else {
             this.ClearMarkers ();
-            this.panel.remove ();
+            if (this.panel) {
+                this.panel.remove ();
+                this.panel = null;
+            }
         }
+    }
+
+    // Exit active state WITHOUT clearing markers (keep measurements visible)
+    ExitActive ()
+    {
+        if (!this.isActive) {
+            return;
+        }
+        this.isActive = false;
+        if (this.button) {
+            this.button.SetSelected (false);
+        }
+        if (this.panel) {
+            this.panel.remove ();
+            this.panel = null;
+        }
+        // Markers stay in scene (still visible)
     }
 
     Click (mouseCoordinates)

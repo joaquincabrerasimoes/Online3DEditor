@@ -29,6 +29,17 @@ export class Model extends ModelObject3D
         return this.root;
     }
 
+    FindNodeById (id)
+    {
+        let result = null;
+        this.root.Enumerate ((node) => {
+            if (node.GetId () === id) {
+                result = node;
+            }
+        });
+        return result;
+    }
+
     NodeCount ()
     {
         let count = 0;

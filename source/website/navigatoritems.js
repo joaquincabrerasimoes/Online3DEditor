@@ -44,6 +44,12 @@ export class MeshItem extends TreeViewButtonItem
         this.OnClick (() => {
             callbacks.onSelected (this.meshInstanceId);
         });
+
+        if (callbacks.onContextMenu) {
+            this.OnContextMenu ((ev) => {
+                callbacks.onContextMenu (ev, this.meshInstanceId, 'mesh');
+            });
+        }
     }
 
     GetMeshInstanceId ()
@@ -96,6 +102,12 @@ export class NodeItem extends TreeViewGroupButtonItem
             this.callbacks.onShowHide (nodeId);
         });
         this.AppendButton (this.showHideButton);
+
+        if (callbacks.onContextMenu) {
+            this.OnContextMenu ((ev) => {
+                callbacks.onContextMenu (ev, nodeId, 'node');
+            });
+        }
     }
 
     GetNodeId ()

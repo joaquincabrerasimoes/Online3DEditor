@@ -1,0 +1,58 @@
+/* Grid Spacing Slider */
+div.ov_grid_slider {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.55);
+    border-radius: 20px;
+    padding: 8px 16px;
+    color: white;
+    width: 200px;
+    user-select: none;
+    pointer-events: auto;
+}
+
+div.ov_grid_slider_label {
+    text-align: center;
+    font-size: 11px;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+}
+
+input.ov_grid_slider_input {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+input.ov_grid_slider_input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    cursor: pointer;
+}
+
+input.ov_grid_slider_input::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    border: none;
+    cursor: pointer;
+}
+
+div.ov_grid_slider_ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    margin-top: 4px;
+    opacity: 0.65;
+}

@@ -3,6 +3,9 @@ import { NavigatorFilesPanel } from './navigatorfilespanel.js';
 import { NavigatorMaterialsPanel } from './navigatormaterialspanel.js';
 import { NavigatorMeshesPanel } from './navigatormeshespanel.js';
 import { PanelSet } from './panelset.js';
+import eventBus, { Events } from './eventbus.js';
+import { MeshInstanceId } from '../engine/model/meshinstance.js';
+import { CreateMeshEntry, CreateMaterialEntry } from './selectionmanager.js';
 
 export const SelectionType =
 {
@@ -47,6 +50,9 @@ export class Navigator
         this.callbacks = null;
         this.selection = null;
         this.tempSelectedMeshId = null;
+        this.selectionManager = null;
+        this.inputManager = null;
+        this.handlingSelectionChange = false;
 
         this.filesPanel = new NavigatorFilesPanel (this.panelSet.GetContentDiv ());
         this.materialsPanel = new NavigatorMaterialsPanel (this.panelSet.GetContentDiv ());
@@ -71,6 +77,22 @@ export class Navigator
     Init (callbacks)
     {
         this.callbacks = callbacks;
+        if (callbacks.selectionManager) {
+            this.selectionManager = callbacks.selectionManager;
+            this.SetupSelectionSubscription ();
+        }
+        if (callbacks.inputManager) {
+            this.inputManager = callbacks.inputManager;
+        }
+        if (callbacks.contextMenu) {
+            this.meshesPanel.SetContextMenu (callbacks.contextMenu);
+        }
+        if (callbacks.selectionManager) {
+            this.meshesPanel.SetSelectionManager (callbacks.selectionManager);
+        }
+        if (callbacks.groupDialogCallback) {
+            this.meshesPanel.SetGroupDialogCallback (callbacks.groupDialogCallback);
+        }
 
         this.panelSet.Init ({
             onResizeRequested : () => {
@@ -211,6 +233,30 @@ export class Navigator
 
     SetSelection (selection)
     {
+        if (this.selectionManager) {
+            if (selection === null) {
+                this.selectionManager.deselectAll ();
+            } else if (selection.type === SelectionType.Mesh) {
+                let id = selection.meshInstanceId;
+                let entry = CreateMeshEntry (id.nodeId, id.meshIndex);
+                let ctrlHeld = this.inputManager && this.inputManager.isCtrlPressed ();
+                if (ctrlHeld) {
+                    this.selectionManager.toggleSelect (entry);
+                } else if (this.selection !== null && this.selection.IsEqual (selection)) {
+                    // Same item clicked again without Ctrl → deselect (old toggle behavior)
+                    this.selectionManager.deselectAll ();
+                } else {
+                    this.selectionManager.select (entry);
+                }
+            } else if (selection.type === SelectionType.Material) {
+                let entry = CreateMaterialEntry (selection.materialIndex);
+                this.selectionManager.select (entry);
+            }
+            // Visual updates and callbacks handled by SetupSelectionSubscription
+            return;
+        }
+
+        // Legacy path (no selectionManager)
         function SetEntitySelection (navigator, selection, select)
         {
             if (selection.type === SelectionType.Material) {
@@ -250,6 +296,75 @@ export class Navigator
         }
 
         this.callbacks.onMeshSelectionChanged ();
+    }
+
+    SetupSelectionSubscription ()
+    {
+        eventBus.on (Events.SelectionChanged, ({ entries, previous }) => {
+            if (this.handlingSelectionChange) {
+                return;
+            }
+            this.handlingSelectionChange = true;
+
+            // Clear old visual selection
+            for (let prev of previous) {
+                if (prev.type === 'mesh') {
+                    let id = new MeshInstanceId (prev.nodeId, prev.meshIndex);
+                    let item = this.meshesPanel.GetMeshItem (id);
+                    if (item) {
+                        item.SetSelected (false);
+                    }
+                } else if (prev.type === 'material') {
+                    this.materialsPanel.SelectMaterialItem (prev.materialIndex, false);
+                }
+            }
+
+            // Apply new visual selection
+            for (let entry of entries) {
+                if (entry.type === 'mesh') {
+                    if (this.panelSet.IsPanelsVisible ()) {
+                        this.panelSet.ShowPanel (this.meshesPanel);
+                    }
+                    let id = new MeshInstanceId (entry.nodeId, entry.meshIndex);
+                    let item = this.meshesPanel.GetMeshItem (id);
+                    if (item) {
+                        item.SetSelected (true);
+                    }
+                } else if (entry.type === 'material') {
+                    if (this.panelSet.IsPanelsVisible ()) {
+                        this.panelSet.ShowPanel (this.materialsPanel);
+                    }
+                    this.materialsPanel.SelectMaterialItem (entry.materialIndex, true);
+                }
+            }
+
+            // Keep this.selection in sync for backward compat
+            this.tempSelectedMeshId = null;
+            if (entries.length === 0) {
+                this.selection = null;
+            } else {
+                let first = entries[0];
+                if (first.type === 'mesh') {
+                    let id = new MeshInstanceId (first.nodeId, first.meshIndex);
+                    this.selection = new Selection (SelectionType.Mesh, id);
+                } else if (first.type === 'material') {
+                    this.selection = new Selection (SelectionType.Material, first.materialIndex);
+                }
+            }
+
+            // Fire old callbacks so sidebar + highlight update
+            this.callbacks.onMeshSelectionChanged ();
+
+            if (entries.length > 1) {
+                // Multi-select: show model properties in sidebar
+                this.callbacks.onSelectionCleared ();
+            } else {
+                this.OnSelectionChanged ();
+            }
+            this.UpdatePanels ();
+
+            this.handlingSelectionChange = false;
+        });
     }
 
     OnSelectionChanged ()

@@ -61,6 +61,15 @@ export class TreeViewItem
         this.mainElement.addEventListener ('click', onClick);
     }
 
+    OnContextMenu (onContextMenu)
+    {
+        this.mainElement.addEventListener ('contextmenu', (ev) => {
+            ev.preventDefault ();
+            ev.stopPropagation ();
+            onContextMenu (ev, this);
+        });
+    }
+
     SetParent (parent)
     {
         this.parent = parent;

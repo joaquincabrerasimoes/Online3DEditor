@@ -367,6 +367,11 @@ export class Navigation
 	{
 		ev.preventDefault ();
 
+		// Suppress navigation mousedown if gizmo is consuming this event
+		if (this.callbacks.isGizmoDragging && this.callbacks.isGizmoDragging ()) {
+			return;
+		}
+
 		this.mouse.Down (this.canvas, ev);
 		this.clickDetector.Start (this.mouse.GetPosition ());
 	}
@@ -384,18 +389,17 @@ export class Navigation
 			return;
 		}
 
+		// Suppress navigation if gizmo is actively being dragged
+		if (this.callbacks.isGizmoDragging && this.callbacks.isGizmoDragging ()) {
+			return;
+		}
+
 		let moveDiff = this.mouse.GetMoveDiff ();
 		let mouseButton = this.mouse.GetButton ();
 
 		let navigationType = NavigationType.None;
 		if (mouseButton === 1) {
-			if (ev.ctrlKey) {
-				navigationType = NavigationType.Zoom;
-			} else if (ev.shiftKey) {
-				navigationType = NavigationType.Pan;
-			} else {
-				navigationType = NavigationType.Orbit;
-			}
+			navigationType = NavigationType.Orbit;
 		} else if (mouseButton === 2 || mouseButton === 3) {
 			navigationType = NavigationType.Pan;
 		}

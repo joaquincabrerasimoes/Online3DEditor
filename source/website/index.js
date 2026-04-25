@@ -21,6 +21,9 @@ import './css/navigator.css';
 import './css/sidebar.css';
 import './css/website.css';
 import './css/embed.css';
+import './css/contextmenu.css';
+import './css/gridslider.css';
+import './css/sidebaractions.css';
 
 export const UI = {
     ButtonDialog,

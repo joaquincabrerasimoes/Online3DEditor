@@ -75,6 +75,9 @@ export class NavigatorMeshesPanel extends NavigatorPanel
         this.rootItem = null;
         this.mode = MeshesPanelMode.Simple;
         this.buttons = null;
+        this.contextMenu = null;
+        this.selectionManager = null;
+        this.groupDialogCallback = null;
 
         this.treeView.AddClass ('tight');
         this.titleButtonsDiv = AddDiv (this.titleDiv, 'ov_navigator_tree_title_buttons');
@@ -122,6 +125,21 @@ export class NavigatorMeshesPanel extends NavigatorPanel
         this.nodeIdToItem = new Map ();
         this.meshInstanceIdToItem = new Map ();
         this.rootItem = null;
+    }
+
+    SetContextMenu (contextMenu)
+    {
+        this.contextMenu = contextMenu;
+    }
+
+    SetSelectionManager (selectionManager)
+    {
+        this.selectionManager = selectionManager;
+    }
+
+    SetGroupDialogCallback (callback)
+    {
+        this.groupDialogCallback = callback;
     }
 
     Init (callbacks)
@@ -334,6 +352,9 @@ export class NavigatorMeshesPanel extends NavigatorPanel
                 },
                 onSelected : (selectedMeshId) => {
                     panel.callbacks.onMeshSelected (selectedMeshId);
+                },
+                onContextMenu : (ev, itemMeshInstanceId) => {
+                    panel.ShowItemContextMenu (ev, itemMeshInstanceId.nodeId, itemMeshInstanceId.meshIndex, 'mesh');
                 }
             });
             panel.meshInstanceIdToItem.set (meshInstanceId.GetKey (), meshItem);
@@ -350,6 +371,9 @@ export class NavigatorMeshesPanel extends NavigatorPanel
                 },
                 onFitToWindow : (selectedNodeId) => {
                     panel.callbacks.onNodeFitToWindow (selectedNodeId);
+                },
+                onContextMenu : (ev, itemNodeId) => {
+                    panel.ShowItemContextMenu (ev, itemNodeId, null, 'node');
                 }
             });
             panel.nodeIdToItem.set (nodeId, nodeItem);
@@ -503,5 +527,61 @@ export class NavigatorMeshesPanel extends NavigatorPanel
     {
         this.ShowAllMeshes (false);
         this.ToggleMeshVisibility (meshInstanceId);
+    }
+
+    ShowItemContextMenu (ev, nodeId, meshIndex, itemType)
+    {
+        if (!this.contextMenu) {
+            return;
+        }
+
+        // If clicked item is not in selection, select it first
+        if (this.selectionManager) {
+            let key = itemType === 'mesh'
+                ? 'mesh:' + nodeId + ':' + meshIndex
+                : 'node:' + nodeId;
+            if (!this.selectionManager.isSelected ({ key : key })) {
+                if (itemType === 'mesh') {
+                    let id = new MeshInstanceId (nodeId, meshIndex);
+                    this.callbacks.onMeshSelected (id);
+                }
+            }
+        }
+
+        let items = [
+            {
+                label : 'Move To Group...',
+                onClick : () => {
+                    if (this.groupDialogCallback) {
+                        this.groupDialogCallback ();
+                    }
+                }
+            },
+            { separator : true },
+            {
+                label : 'Focus',
+                onClick : () => {
+                    if (itemType === 'mesh') {
+                        let id = new MeshInstanceId (nodeId, meshIndex);
+                        this.callbacks.onMeshFitToWindow (id);
+                    } else {
+                        this.callbacks.onNodeFitToWindow (nodeId);
+                    }
+                }
+            },
+            {
+                label : 'Remove from Scene',
+                onClick : () => {
+                    if (itemType === 'mesh') {
+                        let id = new MeshInstanceId (nodeId, meshIndex);
+                        this.callbacks.onMeshShowHide (id);
+                    } else {
+                        this.callbacks.onNodeShowHide (nodeId);
+                    }
+                }
+            }
+        ];
+
+        this.contextMenu.show (ev.clientX, ev.clientY, items);
     }
 }

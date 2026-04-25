@@ -182,6 +182,7 @@ div.main_splitter
 div.main_viewer
 {
 	float: left;
+	position: relative;
 }
 
 div.main_right_container

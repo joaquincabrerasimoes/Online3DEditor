@@ -102,6 +102,25 @@ export class Node
         this.childNodes.splice (index, 1);
     }
 
+    ReparentChildNode (node)
+    {
+        if (node.parent !== null) {
+            let oldParent = node.parent;
+            let index = oldParent.childNodes.indexOf (node);
+            if (index !== -1) {
+                oldParent.childNodes.splice (index, 1);
+            }
+            node.parent = null;
+        }
+        node.parent = this;
+        node.idGenerator = this.idGenerator;
+        // Intentionally do NOT regenerate node.id here.
+        // AddChildNode (line 93) calls idGenerator.GenerateId(), which would
+        // invalidate all existing MeshInstanceId references for this node.
+        // ReparentChildNode preserves the existing id so references remain valid.
+        this.childNodes.push (node);
+    }
+
     GetChildNodes ()
     {
         return this.childNodes;

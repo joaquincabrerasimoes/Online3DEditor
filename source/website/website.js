@@ -8,7 +8,7 @@ import { AddDiv, AddDomElement, ShowDomElement, SetDomElementOuterHeight, Create
 import { CalculatePopupPositionToScreen, ShowListPopup } from './dialogs.js';
 import { HandleEvent } from './eventhandler.js';
 import { HashHandler } from './hashhandler.js';
-import { Navigator, Selection, SelectionType } from './navigator.js';
+import { Navigator } from './navigator.js';
 import { CameraSettings, Settings, Theme } from './settings.js';
 import { Sidebar } from './sidebar.js';
 import { ThemeHandler } from './themehandler.js';
@@ -29,6 +29,20 @@ import { EnumeratePlugins, PluginType } from './pluginregistry.js';
 import { EnvironmentSettings } from '../engine/viewer/shadingmodel.js';
 import { IntersectionMode } from '../engine/viewer/viewermodel.js';
 import { Loc } from '../engine/core/localization.js';
+import eventBus, { Events } from './eventbus.js';
+import { InputManager } from './inputmanager.js';
+import { SelectionManager, CreateMeshEntry } from './selectionmanager.js';
+import { KeyboardHandler } from './keyboardhandler.js';
+import { SnapSystem } from './snap.js';
+import { GizmoManager } from './gizmo/gizmomanager.js';
+import { ContextMenu } from './contextmenu.js';
+import { GroupManager } from './groupmanager.js';
+import { GroupDialog } from './groupdialog.js';
+import { Transformation } from '../engine/geometry/transformation.js';
+import { Matrix } from '../engine/geometry/matrix.js';
+import { InfiniteGrid } from './grid.js';
+import { GridSlider } from './gridslider.js';
+import { ModeCoordinator } from './modecoordinator.js';
 
 const WebsiteUIState =
 {
@@ -198,6 +212,19 @@ export class Website
         this.uiState = WebsiteUIState.Undefined;
         this.layouter = new WebsiteLayouter (this.parameters, this.navigator, this.sidebar, this.viewer, this.measureTool);
         this.model = null;
+        this.selectionManager = null;
+        this.inputManager = null;
+        this.keyboardHandler = null;
+        this.snapSystem = null;
+        this.gizmoManager = null;
+        this.contextMenu = new ContextMenu ();
+        this.groupManager = new GroupManager (eventBus);
+        this.groupDialog = new GroupDialog ();
+        this.transformModeButtonsArray = null;
+        this.snapButton = null;
+        this.grid = null;
+        this.gridSlider = null;
+        this.modeCoordinator = null;
     }
 
     Load ()
@@ -216,16 +243,47 @@ export class Website
             });
         });
 
+        this.selectionManager = new SelectionManager (eventBus);
+        this.snapSystem = new SnapSystem (eventBus);
+        this.keyboardHandler = new KeyboardHandler (eventBus);
         this.InitViewer ();
+        this.InitSidebarActions ();
         this.InitToolbar ();
         this.InitDragAndDrop ();
         this.InitSidebar ();
         this.InitNavigator ();
         this.InitCookieConsent ();
 
+        // ModeCoordinator wires cross-system mode rules
+        this.modeCoordinator = new ModeCoordinator (
+            eventBus,
+            this.gizmoManager,
+            this.measureTool,
+            this.selectionManager,
+            this.contextMenu
+        );
+
         this.viewer.SetMouseClickHandler (this.OnModelClicked.bind (this));
         this.viewer.SetMouseMoveHandler (this.OnModelMouseMoved.bind (this));
         this.viewer.SetContextMenuHandler (this.OnModelContextMenu.bind (this));
+
+        eventBus.on (Events.SelectionSelectAll, () => {
+            if (this.model === null) {
+                return;
+            }
+            let entries = [];
+            this.model.EnumerateMeshInstances ((meshInstance) => {
+                let id = meshInstance.GetId ();
+                entries.push (CreateMeshEntry (id.nodeId, id.meshIndex));
+            });
+            this.selectionManager.selectAll (entries);
+        });
+
+        eventBus.on (Events.CameraFocusRequested, (data) => {
+            if (data && data.meshInstanceId) {
+                this.FitMeshToWindow (data.meshInstanceId);
+            }
+        });
 
         this.layouter.Init ();
         this.SetUIState (WebsiteUIState.Intro);
@@ -301,6 +359,12 @@ export class Website
         this.navigator.FillTree (importResult);
         this.sidebar.UpdateControlsVisibility ();
         this.FitModelToWindow (true);
+        if (this.gizmoManager) {
+            this.gizmoManager.SetModelRef (this.model);
+        }
+        if (this.groupManager) {
+            this.groupManager.SetModel (this.model);
+        }
     }
 
     OnModelClicked (button, mouseCoordinates)
@@ -316,9 +380,15 @@ export class Website
 
         let meshUserData = this.viewer.GetMeshUserDataUnderMouse (IntersectionMode.MeshAndLine, mouseCoordinates);
         if (meshUserData === null) {
-            this.navigator.SetSelection (null);
+            this.selectionManager.deselectAll ();
         } else {
-            this.navigator.SetSelection (new Selection (SelectionType.Mesh, meshUserData.originalMeshInstance.id));
+            let id = meshUserData.originalMeshInstance.id;
+            let entry = CreateMeshEntry (id.nodeId, id.meshIndex);
+            if (this.inputManager && this.inputManager.isCtrlPressed ()) {
+                this.selectionManager.toggleSelect (entry);
+            } else {
+                this.selectionManager.select (entry);
+            }
         }
     }
 
@@ -460,6 +530,17 @@ export class Website
 
     UpdateMeshesSelection ()
     {
+        if (this.selectionManager) {
+            let meshEntries = this.selectionManager.getSelection ().filter ((e) => e.type === 'mesh');
+            if (meshEntries.length > 0) {
+                let selectedKeys = new Set (meshEntries.map ((e) => e.nodeId + ':' + e.meshIndex));
+                this.viewer.SetMeshesHighlight (this.highlightColor, (meshUserData) => {
+                    return selectedKeys.has (meshUserData.originalMeshInstance.id.GetKey ());
+                });
+                return;
+            }
+        }
+        // Fallback: single selection or temp (material panel hover)
         let selectedMeshId = this.navigator.GetSelectedMeshId ();
         this.viewer.SetMeshesHighlight (this.highlightColor, (meshUserData) => {
             if (selectedMeshId !== null && meshUserData.originalMeshInstance.id.IsEqual (selectedMeshId)) {
@@ -591,6 +672,36 @@ export class Website
     {
         let canvas = AddDomElement (this.parameters.viewerDiv, 'canvas');
         this.viewer.Init (canvas);
+        this.inputManager = new InputManager (canvas);
+        this.gizmoManager = new GizmoManager (
+            this.viewer,
+            eventBus,
+            this.selectionManager,
+            this.inputManager,
+            this.snapSystem
+        );
+        // Wire gizmo drag flag to viewer for navigation suppression
+        eventBus.on (Events.GizmoDragStart, () => {
+            this.viewer.SetGizmoDragging (true);
+        });
+        eventBus.on (Events.GizmoDragEnd, () => {
+            this.viewer.SetGizmoDragging (false);
+        });
+
+        // Build infinite grid
+        this.grid = new InfiniteGrid (this.viewer);
+        this.grid.show ();
+
+        // Build grid slider — canvas container is the viewerDiv
+        this.gridSlider = new GridSlider (this.grid, this.parameters.viewerDiv);
+
+        // Update grid fade distance on camera move
+        this.viewer.SetCameraUpdateHandler (() => {
+            if (this.grid) {
+                let camera = this.viewer.GetCamera ();
+                this.grid.update (camera);
+            }
+        });
         this.viewer.SetEdgeSettings (this.settings.edgeSettings);
         this.viewer.SetBackgroundColor (this.settings.backgroundColor);
         this.viewer.SetNavigationMode (this.cameraSettings.navigationMode);
@@ -702,10 +813,66 @@ export class Website
             this.sidebar.UpdateControlsVisibility ();
         });
         AddSeparator (this.toolbar, ['only_full_width', 'only_on_model']);
+
+        // Transform mode radio buttons (Move / Rotate / Scale)
+        let transformButtonData = [
+            { image : 'flip', title : Loc ('Move (T)') },
+            { image : 'fix_up_off', title : Loc ('Rotate (R)') },
+            { image : 'expand', title : Loc ('Scale (S)') }
+        ];
+        let transformButtons = this.toolbar.AddImageRadioButton (transformButtonData, -1, (buttonIndex) => {
+            let modes = ['translate', 'rotate', 'scale'];
+            eventBus.emit (Events.ModeChanged, { mode : modes[buttonIndex] });
+        });
+        for (let btn of transformButtons) {
+            btn.AddClass ('only_full_width');
+            btn.AddClass ('only_on_model');
+        }
+        this.transformModeButtonsArray = transformButtons;
+
+        // Snap toggle
+        let snapButton = AddPushButton (this.toolbar, 'fit', Loc ('Snap (toggle)'), ['only_full_width', 'only_on_model'], (isSelected) => {
+            if (this.snapSystem) {
+                this.snapSystem.setEnabled (isSelected);
+            }
+        });
+        snapButton.SetSelected (true); // ON by default
+        this.snapButton = snapButton;
+
+        // Listen for snap toggle events to sync button state
+        eventBus.on (Events.SnapToggled, ({ enabled }) => {
+            if (this.snapButton) {
+                this.snapButton.SetSelected (enabled);
+            }
+        });
+
+        // Listen for mode changes to sync transform mode buttons
+        eventBus.on (Events.ModeChanged, ({ mode }) => {
+            if (this.transformModeButtonsArray) {
+                let modes = ['translate', 'rotate', 'scale'];
+                let idx = modes.indexOf (mode);
+                for (let i = 0; i < this.transformModeButtonsArray.length; i++) {
+                    this.transformModeButtonsArray[i].SetSelected (i === idx);
+                }
+            }
+        });
+
+        AddSeparator (this.toolbar, ['only_full_width', 'only_on_model']);
+
+        AddButton (this.toolbar, 'close', Loc ('Deselect All'), ['only_full_width', 'only_on_model'], () => {
+            this.selectionManager.deselectAll ();
+        });
+
+        AddSeparator (this.toolbar, ['only_full_width', 'only_on_model']);
         let measureToolButton = AddPushButton (this.toolbar, 'measure', Loc ('Measure'), ['only_full_width', 'only_on_model'], (isSelected) => {
             HandleEvent ('measure_tool_activated', isSelected ? 'on' : 'off');
-            this.navigator.SetSelection (null);
+            this.selectionManager.deselectAll ();
             this.measureTool.SetActive (isSelected);
+            if (isSelected) {
+                eventBus.emit (Events.ModeChanged, { mode : 'measure' });
+            } else {
+                eventBus.emit (Events.ModeChanged, { mode : 'none' });
+            }
         });
         this.measureTool.SetButton (measureToolButton);
         AddSeparator (this.toolbar, ['only_full_width', 'only_on_model']);
@@ -762,6 +929,41 @@ export class Website
         });
     }
 
+    InitSidebarActions ()
+    {
+        this.sidebar.detailsPanel.SetActionCallbacks ({
+            focus : () => {
+                this.FitModelToWindow (false);
+            },
+            ground : () => {
+                this.ApplyGroundToSelection ();
+            },
+            rotateY : (angle) => {
+                this.ApplyRotateYToSelection (angle);
+            },
+            deleteSelection : () => {
+                if (!this.model || !this.selectionManager) {
+                    return;
+                }
+                let entries = this.selectionManager.getSelection ().filter ((e) => e.type === 'mesh');
+                // Remove from highest index first to avoid index shifting
+                let indices = entries.map ((e) => e.meshIndex).sort ((a, b) => b - a);
+                let uniqueIndices = [...new Set (indices)];
+                for (let idx of uniqueIndices) {
+                    this.model.RemoveMesh (idx);
+                }
+                this.selectionManager.deselectAll ();
+                if (this.model) {
+                    this.navigator.FillTree ({
+                        model : this.model,
+                        missingFiles : []
+                    });
+                }
+                this.viewer.Render ();
+            }
+        });
+    }
+
     InitDragAndDrop ()
     {
         window.addEventListener ('dragstart', (ev) => {
@@ -784,6 +986,118 @@ export class Website
                 }
             });
         }, false);
+    }
+
+    GetSelectionPivot ()
+    {
+        if (!this.model || !this.selectionManager) {
+            return null;
+        }
+        let entries = this.selectionManager.getSelection ().filter ((e) => e.type === 'mesh' || e.type === 'node');
+        if (entries.length === 0) {
+            return null;
+        }
+        let sumX = 0, sumY = 0, sumZ = 0, count = 0;
+        for (let entry of entries) {
+            let node = this.model.FindNodeById (entry.nodeId);
+            if (node) {
+                let worldTransform = node.GetWorldTransformation ();
+                let m = worldTransform.GetMatrix ().Get ();
+                sumX += m[12]; sumY += m[13]; sumZ += m[14]; count++;
+            }
+        }
+        return count > 0 ? { x : sumX / count, y : sumY / count, z : sumZ / count } : null;
+    }
+
+    ApplyGroundToSelection ()
+    {
+        if (!this.model || !this.selectionManager) {
+            return;
+        }
+        let entries = this.selectionManager.getSelection ().filter ((e) => e.type === 'mesh' || e.type === 'node');
+        if (entries.length === 0) {
+            return;
+        }
+        // Find minimum world Y across all selected nodes
+        let minY = Infinity;
+        for (let entry of entries) {
+            let node = this.model.FindNodeById (entry.nodeId);
+            if (!node) { continue; }
+            let worldTransform = node.GetWorldTransformation ();
+            let m = worldTransform.GetMatrix ().Get ();
+            if (m[13] < minY) { minY = m[13]; }
+        }
+        if (!isFinite (minY) || Math.abs (minY) < 1e-4) {
+            return;
+        }
+        let offsetY = -minY;
+        for (let entry of entries) {
+            let node = this.model.FindNodeById (entry.nodeId);
+            if (!node) { continue; }
+            let localMatrix = node.GetTransformation ().GetMatrix ().Get ().slice ();
+            localMatrix[13] += offsetY;
+            node.SetTransformation (new Transformation (new Matrix (localMatrix)));
+        }
+        this.viewer.Render ();
+        eventBus.emit (Events.TransformApplied, { type : 'ground' });
+    }
+
+    ApplyRotateYToSelection (angle)
+    {
+        if (!this.model || !this.selectionManager) {
+            return;
+        }
+        let entries = this.selectionManager.getSelection ().filter ((e) => e.type === 'mesh' || e.type === 'node');
+        if (entries.length === 0) {
+            return;
+        }
+        let pivot = this.GetSelectionPivot ();
+        if (!pivot) {
+            return;
+        }
+
+        let axisY = { x : 0, y : 1, z : 0 };
+
+        for (let entry of entries) {
+            let node = this.model.FindNodeById (entry.nodeId);
+            if (!node) { continue; }
+
+            let localM = node.GetTransformation ().GetMatrix ();
+            let parent = node.GetParent ();
+            let worldM = parent !== null
+                ? localM.MultiplyMatrix (parent.GetWorldTransformation ().GetMatrix ())
+                : localM.Clone ();
+
+            let newWorldM;
+            if (angle === null) {
+                // Reset Y rotation: decompose and recompose with identity rotation
+                let trs = worldM.DecomposeTRS ();
+                let identity = { x : 0, y : 0, z : 0, w : 1 };
+                let newMatrix = new Matrix ();
+                newMatrix.ComposeTRS (trs.translation, identity, trs.scale);
+                newWorldM = newMatrix;
+            } else {
+                let rotMatrix = new Matrix ();
+                rotMatrix.CreateRotationAxisAngle (axisY, angle);
+                let toPivot = new Matrix ().CreateTranslation (-pivot.x, -pivot.y, -pivot.z);
+                let fromPivot = new Matrix ().CreateTranslation (pivot.x, pivot.y, pivot.z);
+                let result = toPivot.MultiplyMatrix (worldM);
+                result = rotMatrix.MultiplyMatrix (result);
+                newWorldM = fromPivot.MultiplyMatrix (result);
+            }
+
+            let newLocalM;
+            if (parent !== null) {
+                let parentInv = parent.GetWorldTransformation ().GetMatrix ().Clone ();
+                parentInv.Invert ();
+                newLocalM = newWorldM.MultiplyMatrix (parentInv);
+            } else {
+                newLocalM = newWorldM;
+            }
+            node.SetTransformation (new Transformation (newLocalM));
+        }
+        this.viewer.Render ();
+        eventBus.emit (Events.TransformApplied, { type : 'rotateY', angle });
     }
 
     InitSidebar ()
@@ -896,6 +1210,12 @@ export class Website
         }
 
         this.navigator.Init ({
+            selectionManager : this.selectionManager,
+            inputManager : this.inputManager,
+            contextMenu : this.contextMenu,
+            groupDialogCallback : () => {
+                this.OnMoveToGroupRequested ();
+            },
             openFileBrowserDialog : () => {
                 this.OpenFileBrowserDialog ();
             },
@@ -935,6 +1255,19 @@ export class Website
                 CookieSetBoolVal ('ov_show_navigator', show);
             }
         });
+    }
+
+    OnMoveToGroupRequested ()
+    {
+        if (this.model === null) {
+            return;
+        }
+        // GroupDialog will be initialized in Phase 4 Task 4
+        if (this.groupDialog) {
+            this.groupDialog.Show (this.model, this.groupManager, this.selectionManager, () => {
+                this.navigator.FillTree ({ model : this.model, missingFiles : [] });
+            });
+        }
     }
 
     UpdatePanelsVisibility ()

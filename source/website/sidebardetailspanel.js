@@ -34,6 +34,82 @@ export class SidebarDetailsPanel extends SidebarPanel
     constructor (parentDiv)
     {
         super (parentDiv);
+        this.actionCallbacks = null;
+        this.actionsDiv = null;
+    }
+
+    SetActionCallbacks (callbacks)
+    {
+        this.actionCallbacks = callbacks;
+    }
+
+    ShowObjectActions ()
+    {
+        if (!this.actionCallbacks) {
+            return;
+        }
+
+        // Remove old actions div if present
+        if (this.actionsDiv && this.actionsDiv.parentNode) {
+            this.actionsDiv.remove ();
+        }
+
+        this.actionsDiv = AddDiv (this.panelDiv, 'ov_sidebar_actions');
+
+        let addBtn = (label, title, onClick) => {
+            let btn = AddDomElement (this.actionsDiv, 'button', 'ov_sidebar_action_button');
+            btn.textContent = label;
+            btn.title = title;
+            btn.addEventListener ('click', onClick);
+            return btn;
+        };
+
+        addBtn ('🎯', Loc ('Focus'), () => {
+            if (this.actionCallbacks.focus) { this.actionCallbacks.focus (); }
+        });
+
+        addBtn ('⬇', Loc ('Ground'), () => {
+            if (this.actionCallbacks.ground) { this.actionCallbacks.ground (); }
+        });
+
+        let sep = AddDiv (this.actionsDiv, 'ov_sidebar_action_separator');
+
+        addBtn ('-90°', Loc ('Rotate Y -90°'), () => {
+            if (this.actionCallbacks.rotateY) { this.actionCallbacks.rotateY (-Math.PI / 2); }
+        });
+
+        addBtn ('-45°', Loc ('Rotate Y -45°'), () => {
+            if (this.actionCallbacks.rotateY) { this.actionCallbacks.rotateY (-Math.PI / 4); }
+        });
+
+        addBtn ('0°', Loc ('Reset Y rotation'), () => {
+            if (this.actionCallbacks.rotateY) { this.actionCallbacks.rotateY (null); } // null = reset
+        });
+
+        addBtn ('+45°', Loc ('Rotate Y +45°'), () => {
+            if (this.actionCallbacks.rotateY) { this.actionCallbacks.rotateY (Math.PI / 4); }
+        });
+
+        addBtn ('+90°', Loc ('Rotate Y +90°'), () => {
+            if (this.actionCallbacks.rotateY) { this.actionCallbacks.rotateY (Math.PI / 2); }
+        });
+
+        let sep2 = AddDiv (this.actionsDiv, 'ov_sidebar_action_separator');
+
+        addBtn ('🗑', Loc ('Delete'), () => {
+            if (this.actionCallbacks.deleteSelection) { this.actionCallbacks.deleteSelection (); }
+        });
+
+        // Insert actionsDiv BEFORE contentDiv
+        this.panelDiv.insertBefore (this.actionsDiv, this.contentDiv);
+    }
+
+    HideObjectActions ()
+    {
+        if (this.actionsDiv && this.actionsDiv.parentNode) {
+            this.actionsDiv.remove ();
+            this.actionsDiv = null;
+        }
     }
 
     GetName ()
@@ -46,9 +122,19 @@ export class SidebarDetailsPanel extends SidebarPanel
         return 'details';
     }
 
+    Clear ()
+    {
+        super.Clear ();
+        this.HideObjectActions ();
+    }
+
     AddObject3DProperties (model, object3D)
     {
         this.Clear ();
+        // Show action buttons only for mesh instances (not the full model)
+        if (object3D !== model) {
+            this.ShowObjectActions ();
+        }
         let table = AddDiv (this.contentDiv, 'ov_property_table');
         let boundingBox = GetBoundingBox (object3D);
         let size = SubCoord3D (boundingBox.max, boundingBox.min);

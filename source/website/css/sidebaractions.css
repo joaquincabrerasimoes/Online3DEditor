@@ -1,0 +1,133 @@
+/* Sidebar Object Action Buttons */
+div.ov_sidebar_actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--ov_border_color);
+}
+
+button.ov_sidebar_action_button {
+    padding: 4px 8px;
+    border: 1px solid var(--ov_border_color);
+    border-radius: 4px;
+    background: var(--ov_button_color);
+    color: var(--ov_foreground_color);
+    cursor: pointer;
+    font-size: 12px;
+    min-width: 32px;
+    transition: background 0.1s;
+}
+
+button.ov_sidebar_action_button:hover {
+    background: var(--ov_hover_color);
+}
+
+button.ov_sidebar_action_button:active {
+    opacity: 0.7;
+}
+
+div.ov_sidebar_action_separator {
+    width: 1px;
+    background: var(--ov_border_color);
+    margin: 2px 4px;
+}
+
+/* Group Dialog */
+div.ov_group_dialog {
+    position: fixed;
+    z-index: 1001;
+    background: var(--ov_dialog_background_color);
+    color: var(--ov_dialog_foreground_color);
+    border-radius: 8px;
+    box-shadow: var(--ov_shadow);
+    min-width: 280px;
+    max-width: 400px;
+    padding: 0;
+    overflow: hidden;
+}
+
+div.ov_dialog_title {
+    font-weight: bold;
+    font-size: 14px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--ov_border_color);
+}
+
+div.ov_group_dialog_content {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+div.ov_group_dialog_tree {
+    padding: 4px 0;
+}
+
+div.ov_group_dialog_item {
+    padding: 8px 16px;
+    cursor: pointer;
+}
+
+div.ov_group_dialog_item:hover {
+    background: var(--ov_hover_color);
+}
+
+div.ov_group_dialog_item.selected {
+    background: var(--ov_toolbar_selected_color);
+}
+
+div.ov_group_dialog_create {
+    padding: 8px 16px;
+    border-top: 1px solid var(--ov_border_color);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+input.ov_group_dialog_input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid var(--ov_border_color);
+    border-radius: 4px;
+    background: var(--ov_background_color);
+    color: var(--ov_foreground_color);
+    font-size: 13px;
+}
+
+div.ov_dialog_buttons {
+    padding: 8px 16px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    border-top: 1px solid var(--ov_border_color);
+}
+
+button.ov_dialog_button {
+    padding: 6px 14px;
+    border: 1px solid var(--ov_border_color);
+    border-radius: 4px;
+    background: var(--ov_button_color);
+    color: var(--ov_foreground_color);
+    cursor: pointer;
+    font-size: 13px;
+}
+
+button.ov_dialog_button:hover {
+    background: var(--ov_hover_color);
+}
+
+button.ov_dialog_button.ov_dialog_button_primary {
+    background: #1976D2;
+    color: white;
+    border-color: #1565C0;
+}
+
+button.ov_dialog_button.ov_dialog_button_primary:hover {
+    background: #1565C0;
+}
+
+button.ov_dialog_button.disabled,
+button.ov_dialog_button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}

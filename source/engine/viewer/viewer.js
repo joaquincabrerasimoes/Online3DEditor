@@ -260,6 +260,21 @@ export class Viewer
         return this.navigation.GetCamera ();
     }
 
+    GetThreeCamera ()
+    {
+        return this.camera;
+    }
+
+    SetGizmoDragging (isDragging)
+    {
+        this.gizmoDragging = isDragging;
+    }
+
+    SetCameraUpdateHandler (handler)
+    {
+        this.onCameraUpdate = handler;
+    }
+
     GetProjectionMode ()
     {
         return this.projectionMode;
@@ -531,9 +546,17 @@ export class Viewer
         let canvasElem = this.renderer.domElement;
         this.navigation = new Navigation (canvasElem, camera, {
             onUpdate : () => {
+                if (this.onCameraUpdate) {
+                    this.onCameraUpdate ();
+                }
                 this.Render ();
+            },
+            isGizmoDragging : () => {
+                return this.gizmoDragging;
             }
         });
+        this.gizmoDragging = false;
+        this.onCameraUpdate = null;
 
         this.upVector = new UpVector ();
     }
