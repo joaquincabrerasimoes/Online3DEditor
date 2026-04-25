@@ -1,3 +1,13 @@
+/* Marquee Selector overlay */
+div.ov_marquee_selector {
+    position: absolute;
+    border: 1px solid #1976D2;
+    background: rgba(25, 118, 210, 0.15);
+    pointer-events: none;
+    z-index: 50;
+    box-sizing: border-box;
+}
+
 /* Sidebar Object Action Buttons */
 div.ov_sidebar_actions {
     display: flex;

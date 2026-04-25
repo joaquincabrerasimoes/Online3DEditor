@@ -121,8 +121,9 @@ export class RotateGizmo extends GizmoBase
         );
         let rawDelta = currentAngle - this.startAngle;
 
-        let ctrlHeld = this.inputManager && this.inputManager.isCtrlPressed ();
-        let snappedDelta = ctrlHeld ? rawDelta : this.snapSystem.snapRotation (rawDelta);
+        // Alt held during drag → bypass snap (free placement)
+        let altHeld = this.inputManager && this.inputManager.isAltPressed ();
+        let snappedDelta = altHeld ? rawDelta : this.snapSystem.snapRotation (rawDelta);
 
         // Get rotation axis in world space
         let axisVec = new THREE.Vector3 ();

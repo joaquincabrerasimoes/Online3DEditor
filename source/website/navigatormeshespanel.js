@@ -529,6 +529,29 @@ export class NavigatorMeshesPanel extends NavigatorPanel
         this.ToggleMeshVisibility (meshInstanceId);
     }
 
+    // Rebuild only the mesh tree without touching files/materials panels.
+    // Preserves visibility and expansion state where possible.
+    RefreshMeshTree (model)
+    {
+        let savedHidden = [];
+        this.EnumerateMeshItems ((meshItem) => {
+            if (!meshItem.IsVisible ()) {
+                savedHidden.push (meshItem.GetMeshInstanceId ());
+            }
+            return true;
+        });
+
+        this.ClearMeshTree ();
+        this.FillMeshTree (model);
+
+        for (let meshInstanceId of savedHidden) {
+            let item = this.GetMeshItem (meshInstanceId);
+            if (item) {
+                item.SetVisible (false, NavigatorItemRecurse.Parents);
+            }
+        }
+    }
+
     ShowItemContextMenu (ev, nodeId, meshIndex, itemType)
     {
         if (!this.contextMenu) {

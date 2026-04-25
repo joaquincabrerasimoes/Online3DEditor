@@ -43,6 +43,9 @@ import { Matrix } from '../engine/geometry/matrix.js';
 import { InfiniteGrid } from './grid.js';
 import { GridSlider } from './gridslider.js';
 import { ModeCoordinator } from './modecoordinator.js';
+import { MarqueeSelector } from './marqueeselector.js';
+import { GetBoundingBox } from '../engine/model/modelutils.js';
+import * as THREE from 'three';
 
 const WebsiteUIState =
 {
@@ -225,6 +228,7 @@ export class Website
         this.grid = null;
         this.gridSlider = null;
         this.modeCoordinator = null;
+        this.marqueeSelector = null;
     }
 
     Load ()
@@ -266,6 +270,10 @@ export class Website
         this.viewer.SetMouseClickHandler (this.OnModelClicked.bind (this));
         this.viewer.SetMouseMoveHandler (this.OnModelMouseMoved.bind (this));
         this.viewer.SetContextMenuHandler (this.OnModelContextMenu.bind (this));
+
+        eventBus.on (Events.GroupChanged, () => {
+            this.RefreshMeshTreeView ();
+        });
 
         eventBus.on (Events.SelectionSelectAll, () => {
             if (this.model === null) {
@@ -364,6 +372,12 @@ export class Website
         }
         if (this.groupManager) {
             this.groupManager.SetModel (this.model);
+        }
+        // viewer.Clear() (called from ClearModel before load) wipes extras.
+        // Re-attach grid so it stays visible across model loads.
+        if (this.grid) {
+            this.grid.show ();
+            this.grid.update (this.viewer.GetCamera ());
         }
     }
 
@@ -701,6 +715,24 @@ export class Website
                 let camera = this.viewer.GetCamera ();
                 this.grid.update (camera);
             }
+        });
+
+        // Marquee selector — left-drag on empty space draws a rect
+        this.marqueeSelector = new MarqueeSelector (canvas, this.parameters.viewerDiv);
+        this.marqueeSelector.SetShouldSuppress ((ev) => {
+            // Suppress marquee if drag starts on a mesh OR on a gizmo handle
+            // (mesh case → click flow handles it; gizmo case → gizmo manager owns it)
+            if (this.gizmoManager && this.gizmoManager.IsDragging ()) {
+                return true;
+            }
+            // If cursor is over a mesh at mousedown → click flow takes over (no marquee)
+            let r = canvas.getBoundingClientRect ();
+            let mouseCoords = { x : ev.clientX - r.left, y : ev.clientY - r.top };
+            let userData = this.viewer.GetMeshUserDataUnderMouse (IntersectionMode.MeshAndLine, mouseCoords);
+            return userData !== null;
+        });
+        this.marqueeSelector.SetOnMarqueeEnd ((rect, modifiers) => {
+            this.PerformMarqueeSelection (rect, modifiers);
         });
         this.viewer.SetEdgeSettings (this.settings.edgeSettings);
         this.viewer.SetBackgroundColor (this.settings.backgroundColor);
@@ -1257,16 +1289,92 @@ export class Website
         });
     }
 
+    PerformMarqueeSelection (rect, modifiers)
+    {
+        if (!this.model || !this.selectionManager) {
+            return;
+        }
+
+        let camera = this.viewer.GetThreeCamera ();
+        let canvasSize = this.viewer.GetCanvasSize ();
+        let matched = [];
+
+        this.model.EnumerateMeshInstances ((meshInstance) => {
+            let id = meshInstance.GetId ();
+            // Skip hidden meshes
+            if (this.navigator && !this.navigator.IsMeshVisible (id)) {
+                return;
+            }
+            let bbox = GetBoundingBox (meshInstance);
+            if (!bbox) {
+                return;
+            }
+            let center = new THREE.Vector3 (
+                (bbox.min.x + bbox.max.x) / 2,
+                (bbox.min.y + bbox.max.y) / 2,
+                (bbox.min.z + bbox.max.z) / 2
+            );
+            let projected = center.clone ().project (camera);
+            // Behind camera or outside clip → skip
+            if (projected.z < -1 || projected.z > 1) {
+                return;
+            }
+            let screenX = (projected.x + 1) / 2 * canvasSize.width;
+            let screenY = (1 - projected.y) / 2 * canvasSize.height;
+            if (screenX >= rect.x1 && screenX <= rect.x2 &&
+                screenY >= rect.y1 && screenY <= rect.y2) {
+                matched.push (CreateMeshEntry (id.nodeId, id.meshIndex));
+            }
+        });
+
+        // Apply modifier semantics
+        if (modifiers.shift) {
+            // Additive: add matched to current selection
+            for (let entry of matched) {
+                this.selectionManager.addToSelection (entry);
+            }
+        } else if (modifiers.ctrl) {
+            // Subtractive: remove matched from current selection
+            for (let entry of matched) {
+                if (this.selectionManager.isSelected (entry)) {
+                    this.selectionManager.toggleSelect (entry);
+                }
+            }
+        } else {
+            // Replace
+            if (matched.length === 0) {
+                this.selectionManager.deselectAll ();
+            } else {
+                this.selectionManager.selectAll (matched);
+            }
+        }
+    }
+
     OnMoveToGroupRequested ()
     {
         if (this.model === null) {
             return;
         }
-        // GroupDialog will be initialized in Phase 4 Task 4
         if (this.groupDialog) {
-            this.groupDialog.Show (this.model, this.groupManager, this.selectionManager, () => {
-                this.navigator.FillTree ({ model : this.model, missingFiles : [] });
-            });
+            // Tree refresh after move is handled centrally via Events.GroupChanged
+            // (subscribed in Load()). No onComplete tree rebuild needed here.
+            this.groupDialog.Show (this.model, this.groupManager, this.selectionManager, null);
+        }
+    }
+
+    RefreshMeshTreeView ()
+    {
+        if (!this.model || !this.navigator || !this.navigator.meshesPanel) {
+            return;
+        }
+        // Snapshot selection so visuals can be restored after rebuild
+        let savedSelection = this.selectionManager
+            ? this.selectionManager.getSelection ()
+            : [];
+        this.navigator.meshesPanel.RefreshMeshTree (this.model);
+        // Re-emit selection so tree items get visual highlight again
+        if (this.selectionManager && savedSelection.length > 0) {
+            this.selectionManager.selectAll (savedSelection);
         }
     }
 

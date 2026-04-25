@@ -137,8 +137,9 @@ export class ScaleGizmo extends GizmoBase
         // Clamp to prevent zero/negative
         rawFactor = Math.max (rawFactor, 0.01);
 
-        let ctrlHeld = this.inputManager && this.inputManager.isCtrlPressed ();
-        let snappedFactor = ctrlHeld ? rawFactor : this.snapSystem.snapScale (rawFactor);
+        // Alt held during drag → bypass snap (free placement)
+        let altHeld = this.inputManager && this.inputManager.isAltPressed ();
+        let snappedFactor = altHeld ? rawFactor : this.snapSystem.snapScale (rawFactor);
         snappedFactor = Math.max (snappedFactor, 0.01);
 
         let pivot = this.rootGroup.position;

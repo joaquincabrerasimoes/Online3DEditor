@@ -243,8 +243,9 @@ export class TranslateGizmo extends GizmoBase
         let constrainedDelta = this.ConstrainDelta (rawDelta, this.dragAxis);
 
         // Apply snap
-        let ctrlHeld = this.inputManager && this.inputManager.isCtrlPressed ();
-        let snappedDelta = ctrlHeld ? constrainedDelta : this.snapSystem.snapTranslation (constrainedDelta);
+        // Alt held during drag → bypass snap (free placement)
+        let altHeld = this.inputManager && this.inputManager.isAltPressed ();
+        let snappedDelta = altHeld ? constrainedDelta : this.snapSystem.snapTranslation (constrainedDelta);
 
         // Apply to all selected nodes
         if (this.selectedEntries && this.startWorldPositions) {

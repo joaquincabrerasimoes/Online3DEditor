@@ -398,10 +398,12 @@ export class Navigation
 		let mouseButton = this.mouse.GetButton ();
 
 		let navigationType = NavigationType.None;
-		if (mouseButton === 1) {
-			navigationType = NavigationType.Orbit;
-		} else if (mouseButton === 2 || mouseButton === 3) {
+		// Left button (1) reserved for selection/marquee — NOT camera
+		// Middle button (2) → Pan, Right button (3) → Orbit
+		if (mouseButton === 2) {
 			navigationType = NavigationType.Pan;
+		} else if (mouseButton === 3) {
+			navigationType = NavigationType.Orbit;
 		}
 
 		if (navigationType === NavigationType.Orbit) {
