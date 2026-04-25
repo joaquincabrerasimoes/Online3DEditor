@@ -1,0 +1,2 @@
+[       4ms] [LOG] {eventName: model_load_started, eventLabel: hash, eventParams: undefined} @ http://localhost:8085/website/index.html:24
+[     124ms] [LOG] {eventName: model_loaded, eventLabel: stl, eventParams: undefined} @ http://localhost:8085/website/index.html:24

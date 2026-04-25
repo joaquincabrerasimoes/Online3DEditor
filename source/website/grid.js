@@ -73,9 +73,10 @@ export class InfiniteGrid
             uniforms : {
                 uSpacing : { value : 10.0 },
                 uFadeDistance : { value : 500.0 },
-                // Visible against light AND dark backgrounds (mid-dark gray)
-                uGridColor : { value : new THREE.Color (0.55, 0.55, 0.55) },
-                uMajorColor : { value : new THREE.Color (0.30, 0.30, 0.30) }
+                // Tuned for a mid-gray viewport background.
+                // Minor lines: subtle but clearly readable; major lines: stronger.
+                uGridColor : { value : new THREE.Color (0.55, 0.58, 0.62) },
+                uMajorColor : { value : new THREE.Color (0.78, 0.80, 0.84) }
             },
             vertexShader : VERT,
             fragmentShader : FRAG,
@@ -127,12 +128,12 @@ export class InfiniteGrid
         }
     }
 
-    // Add to scene if not already attached. Robust against viewer.Clear()
-    // which removes the grid mesh's parent reference.
+    // Add to scene directly via the persistent-object API so it survives
+    // viewer.Clear() (which disposes anything inside mainModel + extraModel).
     show ()
     {
         if (!this.mesh.parent) {
-            this.viewer.AddExtraObject (this.mesh);
+            this.viewer.AddPersistentObject (this.mesh);
         }
         this.setVisible (true);
         this.viewer.Render ();

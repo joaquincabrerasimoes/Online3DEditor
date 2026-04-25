@@ -1,0 +1,63 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - link:
+        - /url: index.html
+        - img [ref=e5] [cursor=pointer]
+    - generic [ref=e8]:
+      - generic [ref=e11] [cursor=pointer]: 
+      - generic [ref=e14] [cursor=pointer]: 
+      - text:                  
+      - generic [ref=e17] [cursor=pointer]: 
+      - generic [ref=e20] [cursor=pointer]: 
+  - text:       
+  - generic [ref=e22]:
+    - generic [ref=e23]:
+      - img [ref=e24]
+      - generic [ref=e26]: Drag and drop 3D models here.
+    - generic [ref=e27]:
+      - generic [ref=e28]: "Check an example file:"
+      - generic [ref=e29]:
+        - link "3dm" [ref=e30] [cursor=pointer]:
+          - /url: "#model=assets/models/RhinoLogo.3dm"
+        - link "3ds" [ref=e31] [cursor=pointer]:
+          - /url: "#model=assets/models/cubes.3ds,assets/models/texture.png"
+        - link "3mf" [ref=e32] [cursor=pointer]:
+          - /url: "#model=assets/models/rhombicuboctahedron.3mf"
+        - link "amf" [ref=e33] [cursor=pointer]:
+          - /url: "#model=assets/models/rook.amf"
+        - link "bim" [ref=e34] [cursor=pointer]:
+          - /url: "#model=assets/models/MultipleMeshes.bim"
+        - link "brep" [ref=e35] [cursor=pointer]:
+          - /url: "#model=assets/models/as1_pe_203.brep"
+        - link "dae" [ref=e36] [cursor=pointer]:
+          - /url: "#model=assets/models/X_Bot.dae"
+        - link "fbx" [ref=e37] [cursor=pointer]:
+          - /url: "#model=assets/models/Y_Bot.fbx"
+        - link "fcstd" [ref=e38] [cursor=pointer]:
+          - /url: "#model=assets/models/ArchDetail.FCStd"
+        - link "gltf" [ref=e39] [cursor=pointer]:
+          - /url: "#model=assets/models/DamagedHelmet.glb"
+        - link "ifc" [ref=e40] [cursor=pointer]:
+          - /url: "#model=assets/models/haus.ifc"
+        - link "iges" [ref=e41] [cursor=pointer]:
+          - /url: "#model=assets/models/as1_pe_203.igs"
+        - link "step" [ref=e42] [cursor=pointer]:
+          - /url: "#model=assets/models/as1_pe_203.stp"
+        - link "stl" [ref=e43] [cursor=pointer]:
+          - /url: "#model=assets/models/utah_teapot.stl"
+        - link "obj" [ref=e44] [cursor=pointer]:
+          - /url: "#model=assets/models/solids.obj,assets/models/solids.mtl"
+        - link "off" [ref=e45] [cursor=pointer]:
+          - /url: "#model=assets/models/cube.off"
+        - link "ply" [ref=e46] [cursor=pointer]:
+          - /url: "#model=assets/models/cow.ply"
+        - link "wrl" [ref=e47] [cursor=pointer]:
+          - /url: "#model=assets/models/extrusion3.wrl"
+  - generic [ref=e48]:
+    - generic [ref=e49]:
+      - text: This website uses cookies to offer you better user experience. See the details at the
+      - link "Cookies Policy" [ref=e50] [cursor=pointer]:
+        - /url: info/cookies.html
+      - text: page.
+    - generic [ref=e51] [cursor=pointer]: Accept

@@ -448,6 +448,20 @@ export class Viewer
         this.Render ();
     }
 
+    // Add object directly to the scene. Survives viewer.Clear() (which only
+    // touches mainModel + extraModel). Use for HUD/grid/persistent helpers.
+    AddPersistentObject (object)
+    {
+        this.scene.add (object);
+        this.Render ();
+    }
+
+    RemovePersistentObject (object)
+    {
+        this.scene.remove (object);
+        this.Render ();
+    }
+
     Clear ()
     {
         this.mainModel.Clear ();
