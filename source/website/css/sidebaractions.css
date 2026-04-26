@@ -1,3 +1,32 @@
+/* Filename prompt input (export → save dialog) */
+input.ov_filename_input {
+    width: 280px;
+    padding: 6px 10px;
+    border: 1px solid var(--ov_border_color);
+    border-radius: 4px;
+    background: var(--ov_background_color);
+    color: var(--ov_foreground_color);
+    font-size: 13px;
+    outline: none;
+}
+input.ov_filename_input:focus {
+    border-color: #1976D2;
+}
+
+/* Inline tree-item rename input */
+input.ov_tree_item_rename_input {
+    flex: 1;
+    min-width: 60px;
+    margin: 0 4px;
+    padding: 1px 4px;
+    border: 1px solid #1976D2;
+    border-radius: 3px;
+    background: var(--ov_background_color);
+    color: var(--ov_foreground_color);
+    font: inherit;
+    outline: none;
+}
+
 /* Tree drag-drop visual feedback */
 div.ov_tree_item.drop_target {
     outline: 2px solid #1976D2;

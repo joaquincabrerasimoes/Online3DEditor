@@ -759,31 +759,52 @@ export class NavigatorMeshesPanel extends NavigatorPanel
                         this.groupDialogCallback ();
                     }
                 }
-            },
-            { separator : true },
-            {
-                label : 'Focus',
-                onClick : () => {
-                    if (itemType === 'mesh') {
-                        let id = new MeshInstanceId (nodeId, meshIndex);
-                        this.callbacks.onMeshFitToWindow (id);
-                    } else {
-                        this.callbacks.onNodeFitToWindow (nodeId);
-                    }
-                }
-            },
-            {
-                label : 'Remove from Scene',
-                onClick : () => {
-                    if (itemType === 'mesh') {
-                        let id = new MeshInstanceId (nodeId, meshIndex);
-                        this.callbacks.onMeshShowHide (id);
-                    } else {
-                        this.callbacks.onNodeShowHide (nodeId);
-                    }
-                }
             }
         ];
+
+        // "Rename..." is only meaningful for nodes (groups). Meshes get their
+        // names from the imported model; we don't expose name editing for them.
+        if (itemType === 'node' && this.groupManager) {
+            items.push ({
+                label : 'Rename...',
+                onClick : () => {
+                    let nodeItem = this.GetNodeItem (nodeId);
+                    if (!nodeItem) {
+                        return;
+                    }
+                    let currentName = (nodeItem.name && nodeItem.name.length > 0)
+                        ? nodeItem.name
+                        : '';
+                    nodeItem.BeginRename (currentName, (newName) => {
+                        this.groupManager.renameGroup (nodeId, newName);
+                    });
+                }
+            });
+        }
+
+        items.push ({ separator : true });
+        items.push ({
+            label : 'Focus',
+            onClick : () => {
+                if (itemType === 'mesh') {
+                    let id = new MeshInstanceId (nodeId, meshIndex);
+                    this.callbacks.onMeshFitToWindow (id);
+                } else {
+                    this.callbacks.onNodeFitToWindow (nodeId);
+                }
+            }
+        });
+        items.push ({
+            label : 'Remove from Scene',
+            onClick : () => {
+                if (itemType === 'mesh') {
+                    let id = new MeshInstanceId (nodeId, meshIndex);
+                    this.callbacks.onMeshShowHide (id);
+                } else {
+                    this.callbacks.onNodeShowHide (nodeId);
+                }
+            }
+        });
 
         this.contextMenu.show (ev.clientX, ev.clientY, items);
     }

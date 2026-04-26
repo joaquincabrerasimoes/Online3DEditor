@@ -70,6 +70,93 @@ export class TreeViewItem
         });
     }
 
+    // Inline rename: replace the name span with an editable input. Enter
+    // commits, Escape cancels, blur commits. While renaming, drag/click of
+    // this item are suppressed.
+    BeginRename (currentName, onCommit, onCancel)
+    {
+        if (this._renameInput) {
+            return;
+        }
+
+        let originalName = currentName !== undefined && currentName !== null
+            ? currentName
+            : (this.name || '');
+
+        let input = document.createElement ('input');
+        input.type = 'text';
+        input.value = originalName;
+        input.className = 'ov_tree_item_rename_input';
+
+        // Hide the static label and place the input where it was
+        this.nameElement.style.display = 'none';
+        this.nameElement.parentNode.insertBefore (input, this.nameElement.nextSibling);
+        // Suppress drag while editing
+        let prevDraggable = this.mainElement.draggable;
+        this.mainElement.draggable = false;
+        // requestAnimationFrame so layout settles before focus
+        requestAnimationFrame (() => {
+            input.focus ();
+            input.select ();
+        });
+
+        let finished = false;
+        let cleanup = () => {
+            if (finished) {
+                return;
+            }
+            finished = true;
+            input.remove ();
+            this.nameElement.style.display = '';
+            this.mainElement.draggable = prevDraggable;
+            this._renameInput = null;
+        };
+
+        let commit = () => {
+            let newName = input.value.trim ();
+            cleanup ();
+            if (newName.length > 0 && newName !== originalName) {
+                this.SetName (newName);
+                if (onCommit) {
+                    onCommit (newName);
+                }
+            } else if (onCancel) {
+                onCancel ();
+            }
+        };
+        let cancel = () => {
+            cleanup ();
+            if (onCancel) {
+                onCancel ();
+            }
+        };
+
+        input.addEventListener ('keydown', (ev) => {
+            ev.stopPropagation ();
+            if (ev.key === 'Enter') {
+                ev.preventDefault ();
+                commit ();
+            } else if (ev.key === 'Escape') {
+                ev.preventDefault ();
+                cancel ();
+            }
+        });
+        input.addEventListener ('click', (ev) => {
+            // Don't let an input click select/deselect the tree item
+            ev.stopPropagation ();
+        });
+        input.addEventListener ('blur', commit);
+
+        this._renameInput = input;
+    }
+
+    SetName (name)
+    {
+        this.name = name;
+        this.nameElement.textContent = name;
+        this.mainElement.setAttribute ('title', name);
+    }
+
     SetDraggable (onDragStart)
     {
         this.mainElement.draggable = true;

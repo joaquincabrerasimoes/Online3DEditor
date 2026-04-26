@@ -16,6 +16,78 @@ import { CloneModel, ApplyOptimizations, ApplyVisibilityFilter } from './glbopti
 
 import * as fflate from 'fflate';
 
+// Shows a small modal asking for the file name, pre-filled with `defaultName`.
+// Pressing Enter or clicking "Save" triggers the download with the given
+// buffer and the chosen file name. Cancelling discards the buffer.
+//
+// If the user clears the extension, the original extension is appended back
+// so the download stays a valid file of the requested format.
+function PromptFilenameAndDownload (buffer, defaultName)
+{
+    // Split default into base + extension so we can preserve the extension
+    // on commit.
+    let dotIdx = defaultName.lastIndexOf ('.');
+    let defaultBase = dotIdx > 0 ? defaultName.substring (0, dotIdx) : defaultName;
+    let defaultExt  = dotIdx > 0 ? defaultName.substring (dotIdx) : '';
+
+    let dialog = new ButtonDialog ();
+    let inputRef = { el : null };
+
+    let commit = () => {
+        let val = (inputRef.el.value || '').trim ();
+        if (val.length === 0) {
+            val = defaultBase;
+        }
+        // Reattach extension if user removed it
+        if (defaultExt && !val.toLowerCase ().endsWith (defaultExt.toLowerCase ())) {
+            val = val + defaultExt;
+        }
+        dialog.Close ();
+        DownloadArrayBufferAsFile (buffer, val);
+    };
+
+    let contentDiv = dialog.Init (Loc ('Save File'), [
+        {
+            name : Loc ('Cancel'),
+            subClass : 'outline',
+            onClick : () => { dialog.Close (); }
+        },
+        {
+            name : Loc ('Save'),
+            onClick : () => { commit (); }
+        }
+    ]);
+
+    AddDiv (contentDiv, 'ov_dialog_section', Loc ('Enter the file name:'));
+
+    let input = document.createElement ('input');
+    input.type = 'text';
+    input.className = 'ov_filename_input';
+    input.value = defaultName;
+    contentDiv.appendChild (input);
+    inputRef.el = input;
+
+    input.addEventListener ('keydown', (ev) => {
+        ev.stopPropagation ();
+        if (ev.key === 'Enter') {
+            ev.preventDefault ();
+            commit ();
+        }
+    });
+
+    dialog.Open ();
+
+    // Focus + select the base name so the user can type a new name immediately
+    requestAnimationFrame (() => {
+        input.focus ();
+        if (defaultExt) {
+            input.setSelectionRange (0, defaultBase.length);
+        } else {
+            input.select ();
+        }
+    });
+}
+
 function AddSelectWithCookieSave (parentElement, cookieKey, options, defaultSelectedIndex, onChange)
 {
     let previousOption = CookieGetStringVal (cookieKey, null);
@@ -102,7 +174,8 @@ class ModelExporterUI
                     } else if (files.length === 1) {
                         progressDialog.Close ();
                         let file = files[0];
-                        DownloadArrayBufferAsFile (file.GetBufferContent (), file.GetName ());
+                        // Ask the user for a file name before triggering the download
+                        PromptFilenameAndDownload (file.GetBufferContent (), file.GetName ());
                     } else if (files.length > 1) {
                         let filesInZip = {};
                         for (let file of files) {
@@ -111,7 +184,8 @@ class ModelExporterUI
                         let zippedContent = fflate.zipSync (filesInZip);
                         let zippedBuffer = zippedContent.buffer;
                         progressDialog.Close ();
-                        DownloadArrayBufferAsFile (zippedBuffer, 'model.zip');
+                        // Multi-file export → zipped; same prompt with default model.zip
+                        PromptFilenameAndDownload (zippedBuffer, 'model.zip');
                     }
                 }
             });
