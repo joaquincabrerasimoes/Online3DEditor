@@ -1,3 +1,44 @@
+/* Tree drag-drop visual feedback */
+div.ov_tree_item.drop_target {
+    outline: 2px solid #1976D2;
+    background: rgba(25, 118, 210, 0.18);
+    border-radius: 3px;
+}
+div.ov_tree_view.drop_target_root {
+    outline: 2px dashed #1976D2;
+    outline-offset: -4px;
+    background: rgba(25, 118, 210, 0.06);
+}
+
+/* GLB optimization options */
+div.ov_glb_opt_list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+    padding: 6px 0 4px 0;
+}
+div.ov_glb_opt_row {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+}
+div.ov_glb_opt_row label {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Group dialog hint label */
+div.ov_group_dialog_hint {
+    padding: 6px 16px;
+    font-size: 11px;
+    opacity: 0.75;
+    border-top: 1px solid var(--ov_border_color);
+    background: rgba(0, 0, 0, 0.04);
+}
+
 /* Marquee Selector overlay */
 div.ov_marquee_selector {
     position: absolute;

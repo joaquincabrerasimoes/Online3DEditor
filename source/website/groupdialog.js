@@ -1,29 +1,51 @@
-
+// Move-to-Group dialog.
+// Behaviour:
+//  - Tree picker shows existing groups (root first, then nested groups)
+//  - Click an item → it becomes the move target AND the parent for new groups
+//  - "+ Create New Group" creates a child of the currently-selected target,
+//    so you can build deeper indentation right inside the dialog
+//  - "Move" reparents the original SelectionManager selection under the
+//    chosen target
 
 export class GroupDialog
 {
     constructor ()
     {
         this.overlayDiv = null;
+        this.dialogDiv = null;
         this.selectedGroupId = null;
         this.onEscKey = this.OnEscKey.bind (this);
+
+        // Bound at Show() time so re-rendering can use them
+        this.model = null;
+        this.groupManager = null;
+        this.selectionManager = null;
+        this.treeDiv = null;
+        this.hintDiv = null;
+        this.moveButton = null;
     }
 
     Show (model, groupManager, selectionManager, onComplete)
     {
         this.Close ();
+        this.model = model;
+        this.groupManager = groupManager;
+        this.selectionManager = selectionManager;
+        // Default target = root, so "Create New Group" without prior click
+        // creates a top-level group (sane default)
+        this.selectedGroupId = model.GetRootNode ().GetId ();
 
-        this.selectedGroupId = null;
-
-        // Create modal overlay
+        // Modal overlay
         this.overlayDiv = document.createElement ('div');
         this.overlayDiv.className = 'ov_modal_overlay';
+        this.overlayDiv.addEventListener ('click', () => { this.Close (); });
         document.body.appendChild (this.overlayDiv);
 
         // Dialog card
         let dialogDiv = document.createElement ('div');
         dialogDiv.className = 'ov_dialog ov_group_dialog';
         document.body.appendChild (dialogDiv);
+        this.dialogDiv = dialogDiv;
 
         // Title
         let titleDiv = document.createElement ('div');
@@ -31,30 +53,26 @@ export class GroupDialog
         titleDiv.textContent = 'Move to Group';
         dialogDiv.appendChild (titleDiv);
 
-        // Content — scrollable group tree
+        // Content area
         let contentDiv = document.createElement ('div');
         contentDiv.className = 'ov_dialog_content ov_group_dialog_content';
         dialogDiv.appendChild (contentDiv);
 
+        // Tree
         let treeDiv = document.createElement ('div');
         treeDiv.className = 'ov_group_dialog_tree';
         contentDiv.appendChild (treeDiv);
+        this.treeDiv = treeDiv;
+        this.RebuildTree ();
 
-        // Build tree of existing groups
-        this.BuildGroupTree (treeDiv, model, groupManager, (nodeId) => {
-            this.selectedGroupId = nodeId;
-            // Update selected item visual
-            let allItems = treeDiv.querySelectorAll ('.ov_group_dialog_item');
-            allItems.forEach ((item) => item.classList.remove ('selected'));
-            let selected = treeDiv.querySelector ('[data-node-id="' + nodeId + '"]');
-            if (selected) {
-                selected.classList.add ('selected');
-            }
-            moveButton.disabled = false;
-            moveButton.classList.remove ('disabled');
-        });
+        // Hint about where new groups will be created
+        let hintDiv = document.createElement ('div');
+        hintDiv.className = 'ov_group_dialog_hint';
+        contentDiv.appendChild (hintDiv);
+        this.hintDiv = hintDiv;
+        this.UpdateHint ();
 
-        // Create new group inline section
+        // Create-new-group inline section
         let createSection = document.createElement ('div');
         createSection.className = 'ov_group_dialog_create';
         contentDiv.appendChild (createSection);
@@ -73,7 +91,7 @@ export class GroupDialog
 
         let confirmCreateBtn = document.createElement ('button');
         confirmCreateBtn.className = 'ov_dialog_button';
-        confirmCreateBtn.textContent = '✓';
+        confirmCreateBtn.textContent = '\u2713';
         confirmCreateBtn.style.display = 'none';
         createSection.appendChild (confirmCreateBtn);
 
@@ -84,51 +102,45 @@ export class GroupDialog
             createInput.focus ();
         });
 
+        let resetCreateUI = () => {
+            createBtn.style.display = '';
+            createInput.style.display = 'none';
+            confirmCreateBtn.style.display = 'none';
+            createInput.value = '';
+        };
+
         let doCreate = () => {
             let name = createInput.value.trim ();
             if (!name) {
                 return;
             }
-            let newId = groupManager.createGroup (name, null);
-            if (newId !== null) {
-                this.selectedGroupId = newId;
-                // Rebuild tree to show new group
-                while (treeDiv.firstChild) { treeDiv.removeChild (treeDiv.firstChild); }
-                this.BuildGroupTree (treeDiv, model, groupManager, (nodeId) => {
-                    this.selectedGroupId = nodeId;
-                    let allItems = treeDiv.querySelectorAll ('.ov_group_dialog_item');
-                    allItems.forEach ((item) => item.classList.remove ('selected'));
-                    let sel = treeDiv.querySelector ('[data-node-id="' + nodeId + '"]');
-                    if (sel) { sel.classList.add ('selected'); }
-                    moveButton.disabled = false;
-                    moveButton.classList.remove ('disabled');
-                });
-                // Auto-select the new group
-                let newItem = treeDiv.querySelector ('[data-node-id="' + newId + '"]');
-                if (newItem) {
-                    newItem.classList.add ('selected');
-                    moveButton.disabled = false;
-                    moveButton.classList.remove ('disabled');
-                }
-                createBtn.style.display = '';
-                createInput.style.display = 'none';
-                confirmCreateBtn.style.display = 'none';
-                createInput.value = '';
+            // Create as child of the currently-selected group (root if none).
+            let parentId = this.selectedGroupId !== null
+                ? this.selectedGroupId
+                : this.model.GetRootNode ().GetId ();
+            let newId = this.groupManager.createGroup (name, parentId);
+            if (newId === null) {
+                return;
             }
+            // New group becomes the move target (and the parent for any
+            // subsequent "Create New Group" → enables deep nesting)
+            this.selectedGroupId = newId;
+            this.RebuildTree ();
+            this.UpdateHint ();
+            resetCreateUI ();
         };
 
         confirmCreateBtn.addEventListener ('click', doCreate);
         createInput.addEventListener ('keydown', (ev) => {
-            if (ev.key === 'Enter') { doCreate (); }
-            if (ev.key === 'Escape') {
-                createBtn.style.display = '';
-                createInput.style.display = 'none';
-                confirmCreateBtn.style.display = 'none';
-                createInput.value = '';
+            if (ev.key === 'Enter') {
+                doCreate ();
+            } else if (ev.key === 'Escape') {
+                ev.stopPropagation ();
+                resetCreateUI ();
             }
         });
 
-        // Footer buttons
+        // Footer
         let footerDiv = document.createElement ('div');
         footerDiv.className = 'ov_dialog_buttons';
         dialogDiv.appendChild (footerDiv);
@@ -140,23 +152,23 @@ export class GroupDialog
         footerDiv.appendChild (cancelButton);
 
         let moveButton = document.createElement ('button');
-        moveButton.className = 'ov_dialog_button ov_dialog_button_primary disabled';
+        moveButton.className = 'ov_dialog_button ov_dialog_button_primary';
         moveButton.textContent = 'Move';
-        moveButton.disabled = true;
         moveButton.addEventListener ('click', () => {
             if (this.selectedGroupId === null) {
                 return;
             }
-            let entries = selectionManager.getSelection ();
-            groupManager.moveToGroup (entries, this.selectedGroupId);
+            let entries = this.selectionManager.getSelection ();
+            this.groupManager.moveToGroup (entries, this.selectedGroupId);
             this.Close ();
             if (onComplete) {
                 onComplete ();
             }
         });
         footerDiv.appendChild (moveButton);
+        this.moveButton = moveButton;
 
-        // Center dialog
+        // Center the dialog after layout
         requestAnimationFrame (() => {
             if (!dialogDiv.isConnected) { return; }
             let w = dialogDiv.offsetWidth;
@@ -166,20 +178,24 @@ export class GroupDialog
             dialogDiv.style.top = Math.max (0, (window.innerHeight - h) / 3) + 'px';
         });
 
-        this.dialogDiv = dialogDiv;
-
         document.addEventListener ('keydown', this.onEscKey);
-        this.overlayDiv.addEventListener ('click', () => { this.Close (); });
     }
 
-    BuildGroupTree (container, model, groupManager, onSelect)
+    RebuildTree ()
     {
-        // Add root as option
-        let rootNode = model.GetRootNode ();
-        this.AddGroupItem (container, rootNode, 0, onSelect, true);
+        if (!this.treeDiv) {
+            return;
+        }
+        while (this.treeDiv.firstChild) {
+            this.treeDiv.removeChild (this.treeDiv.firstChild);
+        }
+        let rootNode = this.model.GetRootNode ();
+        this.AddGroupItem (rootNode, 0, true);
+        // Re-apply visual selection
+        this.HighlightSelectedItem ();
     }
 
-    AddGroupItem (container, node, depth, onSelect, isRoot)
+    AddGroupItem (node, depth, isRoot)
     {
         let item = document.createElement ('div');
         item.className = 'ov_group_dialog_item';
@@ -190,17 +206,49 @@ export class GroupDialog
         item.textContent = label;
 
         item.addEventListener ('click', () => {
-            onSelect (node.GetId ());
+            this.selectedGroupId = node.GetId ();
+            this.HighlightSelectedItem ();
+            this.UpdateHint ();
         });
 
-        container.appendChild (item);
+        this.treeDiv.appendChild (item);
 
-        // Add children recursively (non-leaf nodes only)
+        // Recurse only into nodes that act as groups:
+        //   - has children (a container), OR
+        //   - has no meshes (an empty group / freshly created)
+        // This filters out leaf mesh nodes that would otherwise appear as
+        // bogus drop targets in the picker.
         for (let child of node.GetChildNodes ()) {
-            if (child.ChildNodeCount () > 0 || child.GetName ()) {
-                this.AddGroupItem (container, child, depth + 1, onSelect, false);
+            if (child.ChildNodeCount () > 0 || child.MeshIndexCount () === 0) {
+                this.AddGroupItem (child, depth + 1, false);
             }
         }
+    }
+
+    HighlightSelectedItem ()
+    {
+        if (!this.treeDiv) {
+            return;
+        }
+        let allItems = this.treeDiv.querySelectorAll ('.ov_group_dialog_item');
+        allItems.forEach ((item) => item.classList.remove ('selected'));
+        let selected = this.treeDiv.querySelector (
+            '[data-node-id="' + this.selectedGroupId + '"]'
+        );
+        if (selected) {
+            selected.classList.add ('selected');
+        }
+    }
+
+    UpdateHint ()
+    {
+        if (!this.hintDiv || this.selectedGroupId === null) {
+            return;
+        }
+        let node = this.model.FindNodeById (this.selectedGroupId);
+        let isRoot = node === this.model.GetRootNode ();
+        let label = isRoot ? 'Root' : (node && node.GetName () ? node.GetName () : 'Group ' + this.selectedGroupId);
+        this.hintDiv.textContent = 'New groups are created inside: ' + label;
     }
 
     Close ()
@@ -214,6 +262,9 @@ export class GroupDialog
             this.dialogDiv.remove ();
             this.dialogDiv = null;
         }
+        this.treeDiv = null;
+        this.hintDiv = null;
+        this.moveButton = null;
     }
 
     OnEscKey (ev)

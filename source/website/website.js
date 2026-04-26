@@ -1245,6 +1245,7 @@ export class Website
             selectionManager : this.selectionManager,
             inputManager : this.inputManager,
             contextMenu : this.contextMenu,
+            groupManager : this.groupManager,
             groupDialogCallback : () => {
                 this.OnMoveToGroupRequested ();
             },

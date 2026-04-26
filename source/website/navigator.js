@@ -93,6 +93,9 @@ export class Navigator
         if (callbacks.groupDialogCallback) {
             this.meshesPanel.SetGroupDialogCallback (callbacks.groupDialogCallback);
         }
+        if (callbacks.groupManager) {
+            this.meshesPanel.SetGroupManager (callbacks.groupManager);
+        }
 
         this.panelSet.Init ({
             onResizeRequested : () => {

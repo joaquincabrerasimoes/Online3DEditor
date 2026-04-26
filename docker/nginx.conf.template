@@ -10,8 +10,15 @@ server {
         return 302 /website/index.html;
     }
 
-    # Static asset cache headers
-    location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)$ {
+    # JS/CSS bundles change frequently during development → no cache
+    location ~* \.(?:js|css)$ {
+        add_header Cache-Control "no-cache, must-revalidate";
+        expires off;
+        try_files $uri =404;
+    }
+
+    # Other static assets (fonts/images) cache for a week
+    location ~* \.(?:woff2?|ttf|svg|png|jpg|jpeg|gif|ico)$ {
         expires 7d;
         add_header Cache-Control "public, max-age=604800";
         try_files $uri =404;

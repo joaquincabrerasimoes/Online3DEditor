@@ -50,6 +50,17 @@ export class MeshItem extends TreeViewButtonItem
                 callbacks.onContextMenu (ev, this.meshInstanceId, 'mesh');
             });
         }
+
+        if (callbacks.onDragStart) {
+            this.SetDraggable ((ev) => {
+                callbacks.onDragStart (ev, this.meshInstanceId, 'mesh');
+            });
+        }
+        if (callbacks.onDrop) {
+            this.SetDropTarget ({
+                onDrop : (ev) => callbacks.onDrop (ev, this.meshInstanceId, 'mesh')
+            });
+        }
     }
 
     GetMeshInstanceId ()
@@ -106,6 +117,17 @@ export class NodeItem extends TreeViewGroupButtonItem
         if (callbacks.onContextMenu) {
             this.OnContextMenu ((ev) => {
                 callbacks.onContextMenu (ev, nodeId, 'node');
+            });
+        }
+
+        if (callbacks.onDragStart) {
+            this.SetDraggable ((ev) => {
+                callbacks.onDragStart (ev, nodeId, 'node');
+            });
+        }
+        if (callbacks.onDrop) {
+            this.SetDropTarget ({
+                onDrop : (ev) => callbacks.onDrop (ev, nodeId, 'node')
             });
         }
     }

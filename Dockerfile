@@ -28,8 +28,12 @@ RUN npx esbuild source/website/index.js \
     --outfile=build/website/o3dv.website.min.js
 
 # Rewrite index.html to point at the production build dir
-# (default points at build/website_dev/)
-RUN sed -i 's|\.\./build/website_dev/|../build/website/|g' website/index.html
+# (default points at build/website_dev/) and append a build-time cache buster
+# so browsers can't serve a stale bundle after image rebuilds.
+RUN sed -i 's|\.\./build/website_dev/|../build/website/|g' website/index.html && \
+    BUILDTAG=$(date -u +%Y%m%d%H%M%S) && \
+    sed -i "s|o3dv.website.min.css|o3dv.website.min.css?v=${BUILDTAG}|g" website/index.html && \
+    sed -i "s|o3dv.website.min.js|o3dv.website.min.js?v=${BUILDTAG}|g" website/index.html
 
 # ------------------------------------------------------------
 # Stage 2: nginx serving the static bundle

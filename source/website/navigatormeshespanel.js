@@ -78,6 +78,8 @@ export class NavigatorMeshesPanel extends NavigatorPanel
         this.contextMenu = null;
         this.selectionManager = null;
         this.groupDialogCallback = null;
+        this.groupManager = null;
+        this.modelRef = null;
 
         this.treeView.AddClass ('tight');
         this.titleButtonsDiv = AddDiv (this.titleDiv, 'ov_navigator_tree_title_buttons');
@@ -142,6 +144,11 @@ export class NavigatorMeshesPanel extends NavigatorPanel
         this.groupDialogCallback = callback;
     }
 
+    SetGroupManager (groupManager)
+    {
+        this.groupManager = groupManager;
+    }
+
     Init (callbacks)
     {
         super.Init (callbacks);
@@ -161,6 +168,8 @@ export class NavigatorMeshesPanel extends NavigatorPanel
     Fill (importResult)
     {
         super.Fill (importResult);
+        // Stash model so drag-drop handlers can resolve nodes
+        this.modelRef = importResult.model;
 
         const rootNode = importResult.model.GetRootNode ();
         let isHierarchical = false;
@@ -189,6 +198,7 @@ export class NavigatorMeshesPanel extends NavigatorPanel
         }
 
         this.FillMeshTree (importResult.model);
+        this.InstallContainerDropTarget ();
         this.Resize ();
     }
 
@@ -355,6 +365,12 @@ export class NavigatorMeshesPanel extends NavigatorPanel
                 },
                 onContextMenu : (ev, itemMeshInstanceId) => {
                     panel.ShowItemContextMenu (ev, itemMeshInstanceId.nodeId, itemMeshInstanceId.meshIndex, 'mesh');
+                },
+                onDragStart : (ev, id, itemType) => {
+                    panel.HandleDragStart (ev, id, itemType);
+                },
+                onDrop : (ev, id, itemType) => {
+                    panel.HandleDrop (ev, id, itemType);
                 }
             });
             panel.meshInstanceIdToItem.set (meshInstanceId.GetKey (), meshItem);
@@ -374,6 +390,12 @@ export class NavigatorMeshesPanel extends NavigatorPanel
                 },
                 onContextMenu : (ev, itemNodeId) => {
                     panel.ShowItemContextMenu (ev, itemNodeId, null, 'node');
+                },
+                onDragStart : (ev, id, itemType) => {
+                    panel.HandleDragStart (ev, id, itemType);
+                },
+                onDrop : (ev, id, itemType) => {
+                    panel.HandleDrop (ev, id, itemType);
                 }
             });
             panel.nodeIdToItem.set (nodeId, nodeItem);
@@ -529,8 +551,149 @@ export class NavigatorMeshesPanel extends NavigatorPanel
         this.ToggleMeshVisibility (meshInstanceId);
     }
 
+    // Drag/drop: begin dragging an item. If item is in current selection,
+    // the whole selection is dragged; otherwise just this single item.
+    HandleDragStart (ev, id, itemType)
+    {
+        let entries;
+        if (itemType === 'mesh') {
+            let key = 'mesh:' + id.nodeId + ':' + id.meshIndex;
+            if (this.selectionManager && this.selectionManager.isSelected ({ key : key })) {
+                entries = this.selectionManager.getSelection ();
+            } else {
+                entries = [{
+                    type : 'mesh',
+                    nodeId : id.nodeId,
+                    meshIndex : id.meshIndex,
+                    key : key
+                }];
+            }
+        } else if (itemType === 'node') {
+            let key = 'node:' + id;
+            entries = [{ type : 'node', nodeId : id, key : key }];
+        } else {
+            return;
+        }
+        ev.dataTransfer.setData ('application/x-o3d-items', JSON.stringify (entries));
+        ev.dataTransfer.effectAllowed = 'move';
+    }
+
+    // Drop on a tree item or root. Resolves target group and reparents via
+    // GroupManager. Cycle-safe (prevents dropping a node into its descendants).
+    HandleDrop (ev, targetId, targetType)
+    {
+        if (!this.groupManager || !this.modelRef) {
+            return;
+        }
+        let raw = ev.dataTransfer.getData ('application/x-o3d-items');
+        if (!raw) {
+            return;
+        }
+        let entries;
+        try {
+            entries = JSON.parse (raw);
+        } catch (e) {
+            return;
+        }
+        if (!entries || entries.length === 0) {
+            return;
+        }
+
+        let targetNodeId;
+        if (targetType === 'node') {
+            targetNodeId = targetId;
+        } else if (targetType === 'mesh') {
+            // Drop onto a mesh = drop into the mesh's parent group
+            let node = this.modelRef.FindNodeById (targetId.nodeId);
+            if (!node) {
+                return;
+            }
+            let parent = node.GetParent ();
+            targetNodeId = parent
+                ? parent.GetId ()
+                : this.modelRef.GetRootNode ().GetId ();
+        } else if (targetType === 'root') {
+            targetNodeId = this.modelRef.GetRootNode ().GetId ();
+        } else {
+            return;
+        }
+
+        if (this.WouldCreateCycle (entries, targetNodeId)) {
+            return;
+        }
+
+        this.groupManager.moveToGroup (entries, targetNodeId);
+        // Tree refresh fires via Events.GroupChanged subscription
+    }
+
+    // Reject drops where the target node is the dragged node itself or one of
+    // its descendants (would orphan the subtree).
+    WouldCreateCycle (entries, targetNodeId)
+    {
+        for (let entry of entries) {
+            if (entry.type !== 'node') {
+                continue;
+            }
+            if (entry.nodeId === targetNodeId) {
+                return true;
+            }
+            let node = this.modelRef.FindNodeById (entry.nodeId);
+            if (!node) {
+                continue;
+            }
+            let inSubtree = false;
+            node.Enumerate ((n) => {
+                if (n.GetId () === targetNodeId) {
+                    inSubtree = true;
+                }
+            });
+            if (inSubtree) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Make the tree container itself a drop target → root
+    InstallContainerDropTarget ()
+    {
+        let container = this.treeView.GetDomElement ();
+        // Avoid double-installing on Fill rebuilds
+        if (container.dataset.dropInstalled === '1') {
+            return;
+        }
+        container.dataset.dropInstalled = '1';
+
+        container.addEventListener ('dragenter', (ev) => {
+            // Only mark container when not over a child item
+            if (ev.target === container) {
+                ev.preventDefault ();
+                container.classList.add ('drop_target_root');
+            }
+        });
+        container.addEventListener ('dragover', (ev) => {
+            // preventDefault required to allow drop
+            ev.preventDefault ();
+            ev.dataTransfer.dropEffect = 'move';
+        });
+        container.addEventListener ('dragleave', (ev) => {
+            if (ev.target === container && !container.contains (ev.relatedTarget)) {
+                container.classList.remove ('drop_target_root');
+            }
+        });
+        container.addEventListener ('drop', (ev) => {
+            // If a child item handled the drop, it called stopPropagation;
+            // we only get here for drops on the empty tree area → root
+            ev.preventDefault ();
+            container.classList.remove ('drop_target_root');
+            this.HandleDrop (ev, null, 'root');
+        });
+    }
+
     // Rebuild only the mesh tree without touching files/materials panels.
-    // Preserves visibility and expansion state where possible.
+    // Preserves visibility state. If the model became hierarchical (e.g. after
+    // a "Move to Group..." operation) the panel is auto-switched to TreeView
+    // so the new groups are actually visible to the user.
     RefreshMeshTree (model)
     {
         let savedHidden = [];
@@ -541,8 +704,25 @@ export class NavigatorMeshesPanel extends NavigatorPanel
             return true;
         });
 
-        this.ClearMeshTree ();
-        this.FillMeshTree (model);
+        // Re-detect hierarchy. A model is "hierarchical" if any direct child of
+        // the root has its own children OR holds more than one mesh.
+        let rootNode = model.GetRootNode ();
+        let isHierarchical = false;
+        for (let childNode of rootNode.GetChildNodes ()) {
+            if (childNode.ChildNodeCount () > 0 || childNode.MeshIndexCount () > 1) {
+                isHierarchical = true;
+                break;
+            }
+        }
+        if (this.mode === MeshesPanelMode.Simple && isHierarchical) {
+            // Promoted to a hierarchical layout — clear stale items then go
+            // through Fill() so mode/title/buttons all rebuild consistently.
+            this.ClearMeshTree ();
+            this.Fill ({ model : model, missingFiles : [] });
+        } else {
+            this.ClearMeshTree ();
+            this.FillMeshTree (model);
+        }
 
         for (let meshInstanceId of savedHidden) {
             let item = this.GetMeshItem (meshInstanceId);

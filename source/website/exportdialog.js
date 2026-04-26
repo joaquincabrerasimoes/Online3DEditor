@@ -5,13 +5,14 @@ import { FileFormat } from '../engine/io/fileutils.js';
 import { Exporter } from '../engine/export/exporter.js';
 import { ExporterModel, ExporterSettings } from '../engine/export/exportermodel.js';
 import { AddDiv, ClearDomElement } from '../engine/viewer/domutils.js';
-import { AddSelect } from '../website/utils.js';
+import { AddSelect, AddCheckbox } from '../website/utils.js';
 import { ButtonDialog, ProgressDialog } from './dialog.js';
 import { ShowMessageDialog } from './dialogs.js';
 import { DownloadArrayBufferAsFile } from './utils.js';
-import { CookieGetStringVal, CookieSetStringVal } from './cookiehandler.js';
+import { CookieGetStringVal, CookieSetStringVal, CookieGetBoolVal, CookieSetBoolVal } from './cookiehandler.js';
 import { HandleEvent } from './eventhandler.js';
 import { Loc } from '../engine/core/localization.js';
+import { CloneModel, ApplyOptimizations, ApplyVisibilityFilter } from './glboptimizer.js';
 
 import * as fflate from 'fflate';
 
@@ -118,6 +119,82 @@ class ModelExporterUI
     }
 }
 
+// GLB-specific exporter UI: adds optimization checkboxes that pre-process
+// the model (on a clone) before handing it to the standard glTF exporter.
+class GlbExporterUI extends ModelExporterUI
+{
+    constructor ()
+    {
+        super ('glTF Binary (.glb)', FileFormat.Binary, 'glb');
+        this.optimizationOptions = [
+            { key : 'removeDuplicates',     label : 'Remove Duplicates',      cookie : 'ov_glb_opt_remove_duplicates'      },
+            { key : 'removeUnusedVertices', label : 'Remove Unused Vertices', cookie : 'ov_glb_opt_remove_unused_vertices' },
+            { key : 'simplifyGeometry',     label : 'Simplify Geometry',      cookie : 'ov_glb_opt_simplify_geometry'      },
+            { key : 'instanceMeshes',       label : 'Instance Meshes',        cookie : 'ov_glb_opt_instance_meshes'        },
+            { key : 'flattenNodes',         label : 'Flatten Nodes',          cookie : 'ov_glb_opt_flatten_nodes'          },
+            { key : 'joinMeshes',           label : 'Join Meshes',            cookie : 'ov_glb_opt_join_meshes'             },
+            { key : 'weldVertices',         label : 'Weld Vertices',          cookie : 'ov_glb_opt_weld_vertices'           }
+        ];
+        this.checkboxRefs = {};
+    }
+
+    GenerateParametersUI (parametersDiv)
+    {
+        super.GenerateParametersUI (parametersDiv);
+
+        // Section header
+        let header = AddDiv (parametersDiv, 'ov_dialog_section');
+        header.style.marginTop = '10px';
+        header.style.fontWeight = 'bold';
+        header.textContent = Loc ('Optimize GLB');
+
+        let optsDiv = AddDiv (parametersDiv, 'ov_glb_opt_list');
+        for (let opt of this.optimizationOptions) {
+            let row = AddDiv (optsDiv, 'ov_glb_opt_row');
+            let initial = CookieGetBoolVal (opt.cookie, false);
+            let checkboxId = 'ov_glb_opt_' + opt.key;
+            let cb = AddCheckbox (row, checkboxId, Loc (opt.label), initial, () => {
+                CookieSetBoolVal (opt.cookie, cb.checked);
+            });
+            this.checkboxRefs[opt.key] = cb;
+        }
+    }
+
+    ExportModel (model, callbacks)
+    {
+        // Gather flag state from checkboxes
+        let flags = {};
+        let anyEnabled = false;
+        for (let opt of this.optimizationOptions) {
+            let on = this.checkboxRefs[opt.key] && this.checkboxRefs[opt.key].checked;
+            flags[opt.key] = on;
+            anyEnabled = anyEnabled || on;
+        }
+        if (!anyEnabled) {
+            // Nothing to optimize → standard parent flow handles everything
+            super.ExportModel (model, callbacks);
+            return;
+        }
+
+        // Optimization pipeline:
+        //   1. CloneModel (preserves source node IDs)
+        //   2. ApplyVisibilityFilter while IDs still match the live navigator
+        //   3. ApplyOptimizations (these may mutate IDs / mesh indices)
+        //   4. Export via parent with a no-op visibility filter — visibility
+        //      was already applied in step 2.
+        let useVisibleOnly = this.visibleOnlySelect.selectedIndex === 1;
+        let clone = CloneModel (model);
+        if (useVisibleOnly && callbacks && callbacks.isMeshVisible) {
+            ApplyVisibilityFilter (clone, callbacks.isMeshVisible);
+        }
+        ApplyOptimizations (clone, flags);
+
+        super.ExportModel (clone, {
+            isMeshVisible : () => true
+        });
+    }
+}
+
 class ExportDialog
 {
     constructor (callbacks)
@@ -133,7 +210,7 @@ class ExportDialog
             new ModelExporterUI ('Polygon File Format Text (.ply)', FileFormat.Text, 'ply'),
             new ModelExporterUI ('Polygon File Format Binary (.ply)', FileFormat.Binary, 'ply'),
             new ModelExporterUI ('glTF Text (.gltf)', FileFormat.Text, 'gltf'),
-            new ModelExporterUI ('glTF Binary (.glb)', FileFormat.Binary, 'glb'),
+            new GlbExporterUI (),
             new ModelExporterUI ('Object File Format Text (.off)', FileFormat.Text, 'off'),
             new ModelExporterUI ('Rhinoceros 3D (.3dm)', FileFormat.Binary, '3dm'),
             new ModelExporterUI ('Dotbim (.bim)', FileFormat.Text, 'bim')

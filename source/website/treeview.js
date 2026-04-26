@@ -70,6 +70,42 @@ export class TreeViewItem
         });
     }
 
+    SetDraggable (onDragStart)
+    {
+        this.mainElement.draggable = true;
+        this.mainElement.addEventListener ('dragstart', (ev) => {
+            ev.stopPropagation ();
+            onDragStart (ev);
+        });
+    }
+
+    SetDropTarget (callbacks)
+    {
+        this.mainElement.addEventListener ('dragenter', (ev) => {
+            ev.preventDefault ();
+            ev.stopPropagation ();
+            this.mainElement.classList.add ('drop_target');
+        });
+        this.mainElement.addEventListener ('dragover', (ev) => {
+            // Must preventDefault to enable drop
+            ev.preventDefault ();
+            ev.stopPropagation ();
+            ev.dataTransfer.dropEffect = 'move';
+        });
+        this.mainElement.addEventListener ('dragleave', (ev) => {
+            // dragleave fires when entering children; only clear when truly leaving
+            if (!this.mainElement.contains (ev.relatedTarget)) {
+                this.mainElement.classList.remove ('drop_target');
+            }
+        });
+        this.mainElement.addEventListener ('drop', (ev) => {
+            ev.preventDefault ();
+            ev.stopPropagation ();
+            this.mainElement.classList.remove ('drop_target');
+            callbacks.onDrop (ev);
+        });
+    }
+
     SetParent (parent)
     {
         this.parent = parent;
@@ -227,6 +263,11 @@ export class TreeView
     {
         this.mainDiv = AddDiv (parentDiv, 'ov_tree_view');
         this.children = [];
+    }
+
+    GetDomElement ()
+    {
+        return this.mainDiv;
     }
 
     AddClass (className)
