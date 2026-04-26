@@ -22,34 +22,33 @@ uniform vec3 uGridColor;
 uniform vec3 uMajorColor;
 varying vec3 vWorldPos;
 
+// Lines are scaled to be a constant ~1.5 px wide regardless of camera
+// distance, so the grid stays clearly visible in any zoom.
+const float MINOR_THICKNESS = 1.5;
+const float MAJOR_THICKNESS = 2.5;
+
 void main () {
     // Minor grid lines (every uSpacing units)
     vec2 coord = vWorldPos.xz / uSpacing;
     vec2 grid = abs (fract (coord - 0.5) - 0.5) / fwidth (coord);
     float line = min (grid.x, grid.y);
-    float alpha = 1.0 - min (line, 1.0);
+    float alpha = 1.0 - smoothstep (0.0, MINOR_THICKNESS, line);
 
     // Major grid lines (every 10x uSpacing)
     vec2 majorCoord = vWorldPos.xz / (uSpacing * 10.0);
     vec2 majorGrid = abs (fract (majorCoord - 0.5) - 0.5) / fwidth (majorCoord);
     float majorLine = min (majorGrid.x, majorGrid.y);
-    float majorAlpha = 1.0 - min (majorLine, 1.0);
+    float majorAlpha = 1.0 - smoothstep (0.0, MAJOR_THICKNESS, majorLine);
 
-    // Fade based on distance from camera (XZ plane)
+    // Soft fade at horizon. uFadeDistance is set very high so most scenes
+    // stay fully filled with grid.
     float dist = length (vWorldPos.xz - cameraPosition.xz);
-    float fade = 1.0 - smoothstep (uFadeDistance * 0.4, uFadeDistance, dist);
-    if (fade < 0.01) discard;
+    float fade = 1.0 - smoothstep (uFadeDistance * 0.7, uFadeDistance, dist);
+    if (fade < 0.001) discard;
 
-    // Blend major over minor
-    vec3 color;
-    float finalAlpha;
-    if (majorAlpha > 0.0) {
-        color = uMajorColor;
-        finalAlpha = majorAlpha * 0.85 * fade;
-    } else {
-        color = uGridColor;
-        finalAlpha = alpha * 0.45 * fade;
-    }
+    // Major lines win over minor; both blended over the dark background.
+    vec3 color = mix (uGridColor, uMajorColor, majorAlpha);
+    float finalAlpha = max (alpha * 0.55, majorAlpha * 0.95) * fade;
 
     if (finalAlpha < 0.01) discard;
     gl_FragColor = vec4 (color, finalAlpha);
@@ -72,11 +71,11 @@ export class InfiniteGrid
         let mat = new THREE.ShaderMaterial ({
             uniforms : {
                 uSpacing : { value : 10.0 },
-                uFadeDistance : { value : 500.0 },
-                // Tuned for a mid-gray viewport background.
-                // Minor lines: subtle but clearly readable; major lines: stronger.
-                uGridColor : { value : new THREE.Color (0.55, 0.58, 0.62) },
-                uMajorColor : { value : new THREE.Color (0.78, 0.80, 0.84) }
+                uFadeDistance : { value : 10000.0 },
+                // Tuned for the dark navy viewport background — pale-blue lines
+                // pop without being harshly bright.
+                uGridColor : { value : new THREE.Color (0.40, 0.50, 0.65) },
+                uMajorColor : { value : new THREE.Color (0.62, 0.74, 0.88) }
             },
             vertexShader : VERT,
             fragmentShader : FRAG,
@@ -115,15 +114,16 @@ export class InfiniteGrid
         if (!this.mesh) {
             return;
         }
-        // Adjust fade distance based on camera distance to center
-        // (camera is engine Camera object: {eye, center, up, fov})
+        // Keep the grid visible across the entire scene regardless of camera
+        // distance. We still scale the fade with camera distance so the soft
+        // outer fade is at the horizon, but the floor of 5000 means short
+        // viewing distances still get a generous grid.
         if (camera && camera.eye && camera.center) {
             let dx = camera.eye.x - camera.center.x;
             let dy = camera.eye.y - camera.center.y;
             let dz = camera.eye.z - camera.center.z;
             let camDist = Math.sqrt (dx * dx + dy * dy + dz * dz);
-            // Show grid up to ~20x camera distance for distant cameras
-            let fadeDistance = Math.max (100, camDist * 20);
+            let fadeDistance = Math.max (5000, camDist * 100);
             this.mesh.material.uniforms.uFadeDistance.value = fadeDistance;
         }
     }

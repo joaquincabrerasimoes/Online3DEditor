@@ -18,12 +18,12 @@ export class Settings
         this.environmentMapName = 'fishermans_bastion';
         this.backgroundIsEnvMap = false;
         if (this.themeId === Theme.Light) {
-            // Mid-gray viewport background (Blender-ish), readable for grid lines.
-            this.backgroundColor = new RGBAColor (90, 95, 102, 255);
+            // Dark-navy viewport — grid lines pop against it, matches Factory3D look.
+            this.backgroundColor = new RGBAColor (16, 22, 36, 255);
             this.defaultLineColor = new RGBColor (100, 100, 100);
             this.defaultColor = new RGBColor (200, 200, 200);
         } else if (this.themeId === Theme.Dark) {
-            this.backgroundColor = new RGBAColor (42, 43, 46, 255);
+            this.backgroundColor = new RGBAColor (16, 22, 36, 255);
             this.defaultLineColor = new RGBColor (100, 100, 100);
             this.defaultColor = new RGBColor (200, 200, 200);
         }
@@ -35,8 +35,9 @@ export class Settings
         this.themeId = CookieGetIntVal ('ov_theme_id', GetPreferredColorScheme ());
         this.environmentMapName = CookieGetStringVal ('ov_environment_map', 'fishermans_bastion');
         this.backgroundIsEnvMap = CookieGetBoolVal ('ov_background_is_envmap', false);
-        // Bumped cookie key to v2 to invalidate stale white default from older builds.
-        this.backgroundColor = CookieGetRGBAColorVal ('ov_background_color_v2', new RGBAColor (90, 95, 102, 255));
+        // Bumped cookie key to v3 to invalidate stale gray/white defaults
+        // from earlier builds. Default is the Factory3D dark navy.
+        this.backgroundColor = CookieGetRGBAColorVal ('ov_background_color_v3', new RGBAColor (16, 22, 36, 255));
         this.defaultLineColor = CookieGetRGBColorVal ('ov_default_line_color', new RGBColor (100, 100, 100));
         this.defaultColor = CookieGetRGBColorVal ('ov_default_color', new RGBColor (200, 200, 200));
         this.edgeSettings.showEdges = CookieGetBoolVal ('ov_show_edges', false);
@@ -49,7 +50,7 @@ export class Settings
         CookieSetIntVal ('ov_theme_id', this.themeId);
         CookieSetStringVal ('ov_environment_map', this.environmentMapName);
         CookieSetBoolVal ('ov_background_is_envmap', this.backgroundIsEnvMap);
-        CookieSetRGBAColorVal ('ov_background_color_v2', this.backgroundColor);
+        CookieSetRGBAColorVal ('ov_background_color_v3', this.backgroundColor);
         CookieSetRGBColorVal ('ov_default_line_color', this.defaultLineColor);
         CookieSetRGBColorVal ('ov_default_color', this.defaultColor);
         CookieSetBoolVal ('ov_show_edges', this.edgeSettings.showEdges);
